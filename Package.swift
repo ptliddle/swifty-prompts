@@ -18,9 +18,11 @@ let package = Package(
                  targets: ["SwiftyPrompts.OpenAI"])
     ], dependencies: [
         // 💧 A server-side Swift web framework.
-//        .package(url: "https://github.com/ptliddle/openai-kit.git", branch: "main"),
-        .package(path: "../../Libraries/openai-kit"),
-        .package(path: "../SwiftyJsonSchema"),
+        .package(url: "https://github.com/ptliddle/openai-kit.git", branch: "main"),
+        .package(url: "https://github.com/ptliddle/swifty-json-schema.git", branch: "main"),
+//        .package(path: "../../Libraries/openai-kit"),
+//        .package(path: "../SwiftyJsonSchema"),
+
     ],
     targets: [
         // Targets are the basic building blocks of a package, defining a module or a test suite.
@@ -40,7 +42,7 @@ let package = Package(
         .testTarget(
             name: "SwiftyPromptsTests",
             dependencies: ["SwiftyPrompts",
-                           "SwiftyJsonSchema",
+                           .product(name: "SwiftyJsonSchema", package: "swifty-json-schema"),
                            "SwiftyPrompts.OpenAI",
                            .product(name: "OpenAIKit", package: "openai-kit")]
         )
