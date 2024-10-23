@@ -37,6 +37,16 @@ public extension PromptTemplate {
     }
 }
 
+extension String: PromptTemplate {
+    public static var template: String {
+        return ""
+    }
+    
+    public var text: String {
+        return self
+    }
+}
+
 public protocol KeyPathPromptTemplate: PromptTemplate {}
 
 public extension KeyPathPromptTemplate {

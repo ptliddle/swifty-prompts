@@ -116,6 +116,24 @@
         "revision" : "d2ba781702a1d8285419c15ee62fd734a9437ff5",
         "version" : "1.3.2"
       }
+    },
+    {
+      "identity" : "swiftanthropic",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/jamesrochabrun/SwiftAnthropic.git",
+      "state" : {
+        "revision" : "a624abcf464117a0c113043d0b94f294b4bed4d1",
+        "version" : "1.8.2"
+      }
+    },
+    {
+      "identity" : "swifty-json-schema",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/ptliddle/swifty-json-schema.git",
+      "state" : {
+        "branch" : "main",
+        "revision" : "595618b1b4b87bf500c980b26886ba1c5b7bd7d4"
+      }
     }
   ],
   "version" : 2

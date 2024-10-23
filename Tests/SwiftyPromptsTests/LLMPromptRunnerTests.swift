@@ -12,33 +12,84 @@ import OpenAIKit
 import SwiftyJsonSchema
 import SwiftyPrompts
 import SwiftyPrompts_OpenAI
+import SwiftyPrompts_Anthropic
+
+private enum TestService {
+    case anthropic
+    case openAI
+}
 
 final class LLMPromptRunnerTests: XCTestCase {
 
     var openAPIKey: String!
+    var anthropicAPIKey: String!
+    
     let model = Model.GPT4.gpt4oLatest // Some tests require this to be a model that supports structured outputs. If you chnage this those tests may fail
+    var llm: LLM!
+    
+    fileprivate let service: TestService = .anthropic
     
     override func setUp() async throws {
         let environment = ProcessInfo.processInfo.environment
         self.openAPIKey = environment["OPENAI_API_KEY"] ?? { fatalError("You need to add an OpenAI API key to your environment with key 'OPENAI_API_KEY' ") }()
+        self.anthropicAPIKey = environment["ANTHROPIC_API_KEY"] ?? { fatalError("You need to add an OpenAI API key to your environment with key 'OPENAI_API_KEY' ") }()
+        
+        // Make temperature zero so response is always the same and tests will pass
+        switch service {
+        case .anthropic:
+            self.llm = AnthropicLLM(apiKey: anthropicAPIKey, model: .claude3Opus, temperature: 0.0)
+        case .openAI:
+            self.llm = OpenAILLM(apiKey: openAPIKey, model: model, temperature: 0.0)
+        }
+        
     }
     
     func testBasicPromptRunnerWithTextPrompt() async throws {
         let b = BasicPromptRunner()
         
-        let llm = OpenAILLM(apiKey: openAPIKey, model: model)
-        
-        let llmResult = try await b.run(prompt: .string("What is the capital of France?"), on: llm)
+        let llmResult = try await b.run(promptTemplate: "What is the capital of France?", on: llm)
         
         let output = llmResult.output
         let usage = llmResult.usage
         
         print(output)
         
-        XCTAssertEqual(output,  "The capital of France is Paris.")
+        XCTAssertEqual(output, "The capital of France is Paris.")
+    }
+    
+    func testLazyVarStylePrompt() async throws {
+        let b = BasicPromptRunner()
+        
+        class TestPompt: PromptTemplate {
+            static var template: String = ""
+            
+            lazy var intText = { "This is a text prompt \(x) and \(fhg)" }()
+            
+            var x = 4
+            var fhg = "fhg"
+            
+            var text: String {
+                return intText
+            }
+        }
+        
+        let tp = TestPompt()
+        
+        let llmResult = try await b.run(promptTemplate: "What is the capital of France?", on: llm)
+        
+        let output = llmResult.output
+        let usage = llmResult.usage
+        
+        print(output)
+        
+        XCTAssertEqual(output, "The capital of France is Paris.")
     }
 
     func testListOfEuropeanCapitals() async throws {
+        
+        guard service == .openAI else {
+            throw XCTSkip("SwiftyPrompts doesn't support Structured Outputs with Anthropic yet")
+        }
         
         struct CountryInfo: ProducesJSONSchema {
             
@@ -119,9 +170,7 @@ final class LLMPromptRunnerTests: XCTestCase {
         
         let b = JSONSchemaPromptRunner<CountryOutput>()
         
-        let llm = OpenAILLM(apiKey: openAPIKey, model: model, temperature: 0, topP: 1.0)
-        
-        let llmResult = try await b.run(prompt: .template(CountriesCapitalTemplate(encoder: JSONEncoder(), continent: "Europe")), on: llm)
+        let llmResult = try await b.run(promptTemplate: CountriesCapitalTemplate(encoder: JSONEncoder(), continent: "Europe"), on: llm)
         
         let output = llmResult.output
         
@@ -135,6 +184,10 @@ final class LLMPromptRunnerTests: XCTestCase {
     }
     
     func testStructuredOutputPromptRunnerCall() async throws {
+        
+        guard service == .openAI else {
+            throw XCTSkip("SwiftyPrompts doesn't support Structured Outputs with Anthropic yet")
+        }
         
         struct CountryInfo: ProducesJSONSchema {
             
@@ -162,9 +215,7 @@ final class LLMPromptRunnerTests: XCTestCase {
         
         let b = JSONSchemaPromptRunner<CountryOutput>() //.string("List the capitals of Western European countries"))
         
-        let llm = OpenAILLM(apiKey: openAPIKey, model: model, temperature: 0, topP: 1.0)
-        
-        let llmResult = try await b.run(prompt: .template(CountryCapitalTemplate(country: "Belgium")), on: llm)
+        let llmResult = try await b.run(promptTemplate: CountryCapitalTemplate(country: "Belgium"), on: llm)
         
         let output = llmResult.output
         let usage = llmResult.usage
