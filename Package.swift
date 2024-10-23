@@ -22,10 +22,10 @@ let package = Package(
                  targets: ["SwiftyPrompts.xAI"])
     ], dependencies: [
         // 💧 A server-side Swift web framework.
-//        .package(url: "https://github.com/ptliddle/openai-kit.git", branch: "main"),
+        .package(url: "https://github.com/ptliddle/openai-kit.git", branch: "main"),
         .package(url: "https://github.com/ptliddle/swifty-json-schema.git", branch: "main"),
         .package(url: "https://github.com/jamesrochabrun/SwiftAnthropic.git", from: "1.8.0"),
-        .package(path: "../../Libraries/openai-kit"),
+//        .package(path: "../../Libraries/openai-kit"),
 //        .package(path: "../SwiftyJsonSchema"),
 
     ],
