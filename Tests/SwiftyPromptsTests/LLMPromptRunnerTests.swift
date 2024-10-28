@@ -27,7 +27,7 @@ final class LLMPromptRunnerTests: XCTestCase {
     let model = Model.GPT4.gpt4oLatest // Some tests require this to be a model that supports structured outputs. If you chnage this those tests may fail
     var llm: LLM!
     
-    fileprivate let service: TestService = .anthropic
+    fileprivate let service: TestService = .openAI
     
     override func setUp() async throws {
         let environment = ProcessInfo.processInfo.environment

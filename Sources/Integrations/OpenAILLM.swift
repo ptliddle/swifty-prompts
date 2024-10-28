@@ -107,11 +107,11 @@ public class OpenAILLM: LLM {
         return SwiftyPrompts.LLMOutput(rawText: output, usage: usage)
     }
 
-    public func generate(text: String, responseFormat: SwiftyPrompts.ResponseFormat) async throws -> SwiftyPrompts.LLMOutput? {
-        try await self.generate(text: text, stops: [], responseFormat: responseFormat)
-    }
-    
-    public func generate(text: String, stops: [String], responseFormat: SwiftyPrompts.ResponseFormat) async throws -> LLMOutput? {
-        try await infer(messages: [.user(.text(text))], stops: [], responseFormat: responseFormat)
-    }
+//    public func generate(text: String, responseFormat: SwiftyPrompts.ResponseFormat) async throws -> SwiftyPrompts.LLMOutput? {
+//        try await self.generate(text: text, stops: [], responseFormat: responseFormat)
+//    }
+//    
+//    public func generate(text: String, stops: [String], responseFormat: SwiftyPrompts.ResponseFormat) async throws -> LLMOutput? {
+//        try await infer(messages: [.user(.text(text))], stops: [], responseFormat: responseFormat)
+//    }
 }

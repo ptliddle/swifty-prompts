@@ -23,7 +23,7 @@ public protocol PromptTemplate {
 }
 
 public extension PromptTemplate {
-    public var text: String {
+    var text: String {
         
         let mirror = Mirror(reflecting: self)
         var compiledText = Self.template
@@ -51,7 +51,7 @@ public protocol KeyPathPromptTemplate: PromptTemplate {}
 
 public extension KeyPathPromptTemplate {
     
-    public var text: String {
+    var text: String {
         
         let mirror = Mirror(reflecting: self)
         var compiledText = Self.template
@@ -71,7 +71,7 @@ public protocol StructuredInputAndOutputPromptTemplate: PromptTemplate {
 }
 
 public extension StructuredInputAndOutputPromptTemplate {
-    public var text: String {
+    var text: String {
         
         let mirror = Mirror(reflecting: self)
         var compiledText = Self.template
@@ -106,7 +106,7 @@ public protocol KeyPathStructuredInputAndOutputPromptTemplate: StructuredInputAn
 }
 
 public extension KeyPathStructuredInputAndOutputPromptTemplate {
-    public var text: String {
+    var text: String {
         
         let mirror = Mirror(reflecting: self)
         var compiledText = Self.template

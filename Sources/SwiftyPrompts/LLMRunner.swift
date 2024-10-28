@@ -6,24 +6,10 @@
 //
 
 import Foundation
-import SwiftyPrompts
 import SwiftyJsonSchema
 
 public protocol LLM {
-    func generate(text: String, stops: [String], responseFormat: ResponseFormat) async throws -> LLMOutput?
-    func generate(text: String, responseFormat: ResponseFormat) async throws -> LLMOutput?
     func infer(messages: [Message], stops: [String], responseFormat: SwiftyPrompts.ResponseFormat) async throws -> SwiftyPrompts.LLMOutput?
-}
-
-extension LLM {
-    public func generate(text: String, responseFormat: SwiftyPrompts.ResponseFormat) async throws -> SwiftyPrompts.LLMOutput? {
-        // Use infer instead now
-        try await infer(messages: [.user(.text(text))], stops: [], responseFormat: responseFormat)
-    }
-    
-    public func generate(text: String, stops: [String], responseFormat: ResponseFormat) async throws -> LLMOutput? {
-        try await infer(messages:[.user(.text(text))], stops: [], responseFormat: responseFormat)
-    }
 }
 
 public protocol ProducesJSONSchema: Codable {
