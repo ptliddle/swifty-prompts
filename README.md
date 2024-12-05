@@ -23,9 +23,11 @@ Anthropic and xAI through sub packages.
 
 Add SwiftyPrompts to your Swift package using Swift Package Manager:
 
+```swift
 dependencies: [
-.package(url: "https://github.com/ptliddle/swifty-prompts.git", branch: "main")
+    .package(url: "https://github.com/ptliddle/swifty-prompts.git", branch: "main")
 ]
+```
 
 ### Usage
 
