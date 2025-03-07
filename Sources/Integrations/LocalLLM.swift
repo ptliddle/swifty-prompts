@@ -38,7 +38,7 @@ struct ModelLoader {
         self.modelRepoId = modelRepoId
         self.model = "\(repoBasePath)/\(modelRepoId)"
         self.baseModelsStorageDirectory = modelStorageDirectory
-        self.hubApi = HubApi(downloadBase: modelStorageDirectory)
+        self.hubApi = HubApi(downloadBase: modelStorageDirectory, useBackgroundSession: true)
         print("\(self.hubApi.localRepoLocation(.init(id: modelRepoId)))")
     }
     
@@ -46,16 +46,28 @@ struct ModelLoader {
         return self.hubApi.localRepoLocation(.init(id: modelRepoId)).path()
     }
     
+    
     private var downloadStream: AsyncThrowingStream<DownloadStatus, Error>?
     private var downloadContinuation: AsyncThrowingStream<DownloadStatus, Error>.Continuation?
+    
+    
+    let modelFiles = ["*.safetensors", "config.json"]
+    
+    
+    public func delete() async throws {
+        let hub = self.hubApi
+        let repo = Hub.Repo(id: model)
+        
+        // Delete the directory
+        let localRepoFolderUrl = hub.localRepoLocation(repo)
+        try FileManager.default.removeItem(at: localRepoFolderUrl)
+    }
     
     public func download() async throws -> AsyncThrowingStream<Progress, Error>  {
         
         let hub = self.hubApi
         let repo = Hub.Repo(id: model)
-        let modelFiles = ["*.safetensors", "config.json"]
-        
-    
+
         return AsyncThrowingStream<Progress, Error> { continuation in
             
             Task {
@@ -142,8 +154,12 @@ struct ModelLoader {
         let dirExists = fileManager.fileExists(atPath: modelDirectory.path())
          
         let reduce = coreModelFiles.reduce(true) { partialResult, fileName in
-            let exists = fileManager.fileExists(atPath: modelDirectory.appending(component: fileName).path())
-            return partialResult && exists
+            let filePath = modelDirectory.appending(component: fileName).path()
+            let exists = fileManager.fileExists(atPath: filePath)
+            guard let fileSize = try? FileManager.default.attributesOfItem(atPath: filePath)[.size] as? Int else {
+                return partialResult && false
+            }
+            return partialResult && exists && fileSize > 0
         }
         
         return dirExists && reduce
@@ -329,6 +345,9 @@ public class LocalLLM: LLM {
         return llmLoader.isModelDownloadedAndValid()
     }
 
+    public func deleteModel() async throws {
+        try await llmLoader.delete()
+    }
     
     public func downloadModel() async throws -> AsyncThrowingStream<Progress, Error>  {
         return try await llmLoader.download()
