@@ -22,7 +22,9 @@ let package = Package(
         .library(name: "SwiftyPrompts.xAI",
                  targets: ["SwiftyPrompts.xAI"]),
         .library(name: "SwiftyPrompts.Local",
-                 targets: ["SwiftyPrompts.Local"])
+                 targets: ["SwiftyPrompts.Local"]),
+        .library(name: "SwiftyPrompts.Tools",
+                 targets: ["SwiftyPrompts.Tools"])
     ], dependencies: [
         // 💧 A server-side Swift web framework.
         .package(url: "https://github.com/ptliddle/openai-kit.git", branch: "main"),
@@ -102,6 +104,13 @@ let package = Package(
                 "Integrations/LocalLLM.swift"
             ]
         ),
+        .target(
+            name: "SwiftyPrompts.Tools",
+            dependencies: [
+                "SwiftyPrompts"
+            ],
+            path: "Sources/Tools"
+        ),
         .testTarget(
             name: "SwiftyPromptsTests",
             dependencies: ["SwiftyPrompts",
@@ -110,6 +119,7 @@ let package = Package(
                            "SwiftyPrompts.Anthropic",
                            "SwiftyPrompts.xAI",
                            "SwiftyPrompts.Local",
+                           "SwiftyPrompts.Tools",
                            .product(name: "OpenAIKit", package: "openai-kit")]
         )
     ]
