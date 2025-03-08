@@ -12,4 +12,11 @@ public struct Tools {
     public func exampleTool(input: String) -> String {
         return "Processed: \(input)"
     }
+    
+    /// Create a new Landing.ai Document Extraction API client
+    /// - Parameter apiKey: The API key for authentication with Landing.ai
+    /// - Returns: A configured DocumentExtractionClient
+    public func createDocumentExtractionClient(apiKey: String) -> DocumentExtractionClient {
+        return DocumentExtractionClient(apiKey: apiKey)
+    }
 }

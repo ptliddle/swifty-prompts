@@ -120,7 +120,10 @@ let package = Package(
                            "SwiftyPrompts.xAI",
                            "SwiftyPrompts.Local",
                            "SwiftyPrompts.Tools",
-                           .product(name: "OpenAIKit", package: "openai-kit")]
+                           .product(name: "OpenAIKit", package: "openai-kit")],
+            resources: [
+                .process("Resources/test.pdf")
+            ]
         )
     ]
 )
