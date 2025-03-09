@@ -19,4 +19,13 @@ public struct Tools {
     public func createDocumentExtractionClient(apiKey: String) -> DocumentExtractionClient {
         return DocumentExtractionClient(apiKey: apiKey)
     }
+    
+    /// Create a new Firecrawl MCP client for LLM integration
+    /// - Parameters:
+    ///   - baseURL: URL of the MCP server
+    ///   - headers: Optional headers to include in requests
+    /// - Returns: A configured FirecrawlMCPClient
+    public func createFirecrawlMCPClient(baseURL: URL, headers: [String: String] = [:]) -> FirecrawlMCPClient {
+        return FirecrawlMCPClient(baseURL: baseURL, headers: headers)
+    }
 }
