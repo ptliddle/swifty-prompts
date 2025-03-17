@@ -1,0 +1,22 @@
+{
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:SwiftyPrompts}",
+            "name": "Debug SwiftyPromptExamples",
+            "program": "${workspaceFolder:SwiftyPrompts}/.build/debug/SwiftyPromptExamples",
+            "preLaunchTask": "swift: Build Debug SwiftyPromptExamples"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:SwiftyPrompts}",
+            "name": "Release SwiftyPromptExamples",
+            "program": "${workspaceFolder:SwiftyPrompts}/.build/release/SwiftyPromptExamples",
+            "preLaunchTask": "swift: Build Release SwiftyPromptExamples"
+        }
+    ]
+}

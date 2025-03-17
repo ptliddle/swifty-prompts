@@ -24,7 +24,9 @@ let package = Package(
         .library(name: "SwiftyPrompts.Local",
                  targets: ["SwiftyPrompts.Local"]),
         .library(name: "SwiftyPrompts.Tools",
-                 targets: ["SwiftyPrompts.Tools"])
+                 targets: ["SwiftyPrompts.Tools"]),
+        .library(name: "SwiftyPrompts.VaporSupport",
+                 targets: ["SwiftyPrompts.VaporSupport"])
     ], dependencies: [
         // 💧 A server-side Swift web framework.
         .package(url: "https://github.com/ptliddle/openai-kit.git", branch: "main"),
@@ -36,7 +38,7 @@ let package = Package(
         .package(url: "https://github.com/huggingface/swift-transformers", from: "0.1.13"),
         .package(url: "https://github.com/1024jp/GzipSwift", "6.0.1" ... "6.0.1"),
         .package(url: "https://github.com/apple/swift-async-algorithms", from: "1.0.0"),
-       
+        .package(url: "https://github.com/vapor/vapor.git", from: "4.83.1")
 //        .package(path: "../../Libraries/openai-kit"),
 //        .package(path: "../SwiftyJsonSchema"),
 
@@ -44,6 +46,13 @@ let package = Package(
     targets: [
         // Targets are the basic building blocks of a package, defining a module or a test suite.
         // Targets can depend on other targets in this package and products from dependencies.
+        .executableTarget(
+            name: "SwiftyPromptExamples",
+            dependencies: [
+                "SwiftyPrompts",
+                "SwiftyPrompts.Tools"
+            ]
+        ),
         .target(
             name: "SwiftyPrompts",
             dependencies: [
@@ -110,6 +119,14 @@ let package = Package(
                 "SwiftyPrompts"
             ],
             path: "Sources/Tools"
+        ),
+        .target(
+            name: "SwiftyPrompts.VaporSupport",
+            dependencies: [
+                .product(name: "Vapor", package: "vapor"),
+                "SwiftyPrompts"
+            ],
+            path: "Sources/VaporSupport"
         ),
         .testTarget(
             name: "SwiftyPromptsTests",

@@ -9,12 +9,20 @@ import Foundation
 
 public enum Content {
     case text(String)
+    case fileId(String)
 }
 
 public enum Message {
     case system(Content)
     case user(Content)
     case ai(Content)
+    
+    public var content: Content {
+        switch self {
+        case .ai(let content), .system(let content), .user(let content):
+            return content
+        }
+    }
 }
 
 public struct Usage {

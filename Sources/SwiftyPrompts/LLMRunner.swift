@@ -8,8 +8,13 @@
 import Foundation
 import SwiftyJsonSchema
 
+public enum APIType {
+    case standard
+    case advanced
+}
+
 public protocol LLM {
-    func infer(messages: [Message], stops: [String], responseFormat: SwiftyPrompts.ResponseFormat) async throws -> SwiftyPrompts.LLMOutput?
+    func infer(messages: [Message], stops: [String], responseFormat: SwiftyPrompts.ResponseFormat, apiType: APIType) async throws -> SwiftyPrompts.LLMOutput?
 }
 
 public protocol ProducesJSONSchema: Codable {
@@ -26,7 +31,7 @@ public protocol PromptRunner {
 public enum ResponseFormat {
     case text
     case jsonObject
-    case jsonSchema(JSONSchema)
+    case jsonSchema(JSONSchema, String)
 }
 
 public struct LLMOutput {
@@ -43,12 +48,16 @@ public enum PromptRunnerError: Error {
     case invalidPromptTypeForRunner
 }
 
+
 public struct JSONSchemaPromptRunner<OutputType: ProducesJSONSchema>: PromptRunner {
 
     private let decoder: JSONDecoder
     
-    public init(customDecoder: JSONDecoder = JSONDecoder()) {
-        self.decoder = customDecoder
+    let apiType: APIType
+    
+    public init(decoder: JSONDecoder = JSONDecoder(), apiType: APIType = .standard) {
+        self.decoder = decoder
+        self.apiType = apiType
     }
     
     public func run(promptTemplate: PromptTemplate, on llm: LLM) async throws -> (usage: Usage, output: OutputType, runTime: TimeInterval?) {
@@ -62,7 +71,7 @@ public struct JSONSchemaPromptRunner<OutputType: ProducesJSONSchema>: PromptRunn
         let schema = JsonSchemaCreator.createJSONSchema(for: OutputType.exampleValue)
         
         let start = Date.now
-        let llmResult = try await llm.infer(messages: messages, stops: [], responseFormat: ResponseFormat.jsonSchema(schema))
+        let llmResult = try await llm.infer(messages: messages, stops: [], responseFormat: ResponseFormat.jsonSchema(schema, "\(OutputType.self)"), apiType: apiType)
         
         let timeToRunSeconds = Date.now.timeIntervalSince1970 - start.timeIntervalSince1970
         
@@ -91,7 +100,7 @@ public struct BasicPromptRunner: PromptRunner {
     public func run(with messages: [Message], on llm: LLM) async throws -> (usage: Usage, output: String, runTime: TimeInterval?) {
    
         let start = Date.now
-        let llmResult = try await llm.infer(messages: messages, stops: [], responseFormat: .text)
+        let llmResult = try await llm.infer(messages: messages, stops: [], responseFormat: .text, apiType: .standard)
         let timeToRunSeconds = Date.now.timeIntervalSince1970 - start.timeIntervalSince1970
         
         let output = llmResult?.rawText as? OutputType ?? ""
