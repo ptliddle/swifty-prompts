@@ -29,8 +29,8 @@ let package = Package(
                  targets: ["SwiftyPrompts.VaporSupport"])
     ], dependencies: [
         // 💧 A server-side Swift web framework.
-//        .package(url: "https://github.com/ptliddle/openai-kit.git", branch: "main"),
-        .package(path: "../../Libraries/openai-kit"),
+        .package(url: "https://github.com/ptliddle/openai-kit.git", branch: "wip/add-responses-api"),
+//        .package(path: "../../Libraries/openai-kit"),
         .package(url: "https://github.com/ptliddle/swifty-json-schema.git", branch: "main"),
         .package(url: "https://github.com/jamesrochabrun/SwiftAnthropic.git", from: "1.8.0"),
         
