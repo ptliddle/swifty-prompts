@@ -353,7 +353,7 @@ public class LocalLLM: LLM {
         return try await llmLoader.download()
     }
     
-    public func infer(messages: [SwiftyPrompts.Message], stops: [String], responseFormat: SwiftyPrompts.ResponseFormat) async throws -> SwiftyPrompts.LLMOutput? {
+    public func infer(messages: [SwiftyPrompts.Message], stops: [String], responseFormat: SwiftyPrompts.ResponseFormat, apiType: SwiftyPrompts.APIType = .standard) async throws -> SwiftyPrompts.LLMOutput? {
         
         memoryEval?.start()
         

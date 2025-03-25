@@ -66,7 +66,7 @@ open class AnthropicLLM: LLM {
         return AnthropicServiceFactory.service(apiKey: apiKey, betaHeaders: nil)
     }
     
-    public func infer(messages: [Message], stops: [String], responseFormat: ResponseFormat) async throws -> LLMOutput? {
+    public func infer(messages: [SwiftyPrompts.Message], stops: [String], responseFormat: SwiftyPrompts.ResponseFormat, apiType: SwiftyPrompts.APIType = .standard) async throws -> SwiftyPrompts.LLMOutput? {
         
         let anthropicClient = createClient()
         

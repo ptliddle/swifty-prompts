@@ -15,7 +15,7 @@ import NIOCore
 
 import OpenAIKit
 import SwiftyPrompts
-
+import Logging
 
 public enum ContentError: Error {
     case unsupportedMediaType
@@ -114,14 +114,32 @@ private extension SwiftyPrompts.ResponseFormat {
 
 public class OpenAILLM: LLM {
     
+    let logger = Logger(label: "\(OpenAILLM.self)")
+    
+    func logInfo(_ text: String) {
+        logger.info("\(text)")
+    }
+    
     let apiKey: String
     let model: ModelID
     let temperature: Double
     let baseUrl: String
     
+    let storeResponses: Bool = true
+    
+    var requestHandler: DelegatedRequestHandler? = nil
+    
 #if os(Linux)
     static let eventLoopGroup: MultiThreadedEventLoopGroup = MultiThreadedEventLoopGroup(numberOfThreads: System.coreCount)
 #endif
+    
+    public init(with requestHandler: DelegatedRequestHandler, baseUrl: String = "api.openai.com", apiKey: String, model: ModelID = Model.GPT4.gpt4o, temperature: Double = 0.0, topP: Double = 1.0) {
+        self.apiKey = apiKey
+        self.model = model
+        self.temperature = temperature
+        self.baseUrl = baseUrl
+        self.requestHandler = requestHandler
+    }
 
     public init(baseUrl: String = "api.openai.com", apiKey: String, model: ModelID = Model.GPT4.gpt4o, temperature: Double = 0.0, topP: Double = 1.0) {
         self.apiKey = apiKey
@@ -130,51 +148,50 @@ public class OpenAILLM: LLM {
         self.baseUrl = baseUrl
     }
     
-//    "input": [
-//                {
-//                    "role": "user",
-//                    "content": [
-//                        {
-//                            "type": "input_file",
-//                            "file_id": "file-6F2ksmvXxt4VdoqmHRw6kL"
-//                        },
-//                        {
-//                            "type": "input_text",
-//                            "text": "What is the first dragon in the book?"
-//                        }
-//                    ]
-//                }
-//            ]
-    
     public func infer(messages: [Message], stops: [String] = [], responseFormat: SwiftyPrompts.ResponseFormat, apiType: APIType = .standard) async throws -> SwiftyPrompts.LLMOutput? {
         
         let configuration = Configuration(apiKey: apiKey, api: API(scheme: .https, host: baseUrl))
         
-#if os(Linux)
-        let httpClient = HTTPClient(eventLoopGroupProvider: .shared(Self.eventLoopGroup))
-        defer {
-            // it's important to shutdown the httpClient after all requests are done, even if one failed. See: https://github.com/swift-server/async-http-client
-            try? httpClient.syncShutdown()
-        }
+        let openAIClient: OpenAIKit.Client
         
-        let openAIClient = OpenAIKit.Client(httpClient: httpClient, configuration: configuration)
+        if let delegatedHandler = requestHandler {
+            logInfo("Using Delegated Request Handler of type \(requestHandler.self) for OpenAIKit communication")
+            openAIClient = OpenAIKit.Client(delegatedHandler: delegatedHandler)
+        } 
+        else {
+#if os(Linux)
+            logInfo("Using HTTPClient for OpenAIKit communication")
+            let httpClient = HTTPClient(eventLoopGroupProvider: .shared(Self.eventLoopGroup))
+            defer {
+                // it's important to shutdown the httpClient after all requests are done, even if one failed. See: https://github.com/swift-server/async-http-client
+                try? httpClient.syncShutdown()
+            }
+            
+            let openAIClient = OpenAIKit.Client(httpClient: httpClient, configuration: configuration)
 #else
-        let session = URLSession(configuration: .default)
-        let openAIClient = OpenAIKit.Client(session: session, configuration: configuration)
+            logInfo("Using URLSession for OpenAIKit communication")
+            let session = URLSession(configuration: .default)
+            openAIClient = OpenAIKit.Client(session: session, configuration: configuration)
 #endif
+        }
+
       
         let (output, usage): (String, SwiftyPrompts.Usage)
         
         switch apiType {
         case .standard:
+            
+            if storeResponses {
+                logInfo("Store responses is only valid for ADVANCED mode. STANDARD mode will ignore and not store responses")
+            }
+            
             let completion = try await openAIClient.chats.create(model: model, messages: messages.openAIFormat(), temperature: temperature, stops: stops, responseFormat: responseFormat.chatRequestFormat())
             let returnedOutput = completion.choices.first!.message
-//            let usage = completion.usage
             let intUsage = SwiftyPrompts.Usage(promptTokens: completion.usage.promptTokens, completionTokens: completion.usage.completionTokens ?? 0, totalTokens: completion.usage.totalTokens)
             (output, usage) = (returnedOutput.content, intUsage)
         case .advanced:
             // Move this to a process function
-            let responseOutput = try await openAIClient.responses.create(model: model, messages: messages.asOpenAIResponseInput(), responseFormat: responseFormat.responseRequestFormat())
+            let responseOutput = try await openAIClient.responses.create(model: model, messages: messages.asOpenAIResponseInput(), responseFormat: responseFormat.responseRequestFormat(), store: storeResponses)
             let processedOutput = responseOutput.output.map({ $0.contentText }).joined(separator: "\n")
             
             
@@ -188,12 +205,4 @@ public class OpenAILLM: LLM {
         
         return SwiftyPrompts.LLMOutput(rawText: output, usage: usage)
     }
-
-//    public func generate(text: String, responseFormat: SwiftyPrompts.ResponseFormat) async throws -> SwiftyPrompts.LLMOutput? {
-//        try await self.generate(text: text, stops: [], responseFormat: responseFormat)
-//    }
-//    
-//    public func generate(text: String, stops: [String], responseFormat: SwiftyPrompts.ResponseFormat) async throws -> LLMOutput? {
-//        try await infer(messages: [.user(.text(text))], stops: [], responseFormat: responseFormat)
-//    }
 }

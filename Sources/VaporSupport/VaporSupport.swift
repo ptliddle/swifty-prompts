@@ -8,6 +8,7 @@
 import Foundation
 import SwiftyPrompts
 import Vapor
+import OpenAIKit
 
 public struct VaporSender: RequestSender {
     public var timeout: TimeInterval = 500.0
@@ -37,5 +38,73 @@ public struct VaporSender: RequestSender {
         }
         
         return data
+    }
+}
+
+enum VaporDelegatedRequestHandlerError: Error {
+    case responseBodyMissing
+}
+
+public class VaporDelegatedRequestHandler: DelegatedRequestHandler {
+    
+    public var configuration: OpenAIKit.Configuration
+    var client: Vapor.Client
+    var log: Logger = Logger(label: "vapor delegated request logger")
+    var decoder = JSONDecoder()
+    
+    public init(apiKey: String, client: Vapor.Client, logger: Logger) {
+        self.client = client
+        self.log = logger
+        self.configuration = OpenAIKit.Configuration(apiKey: apiKey, organization: nil, api: nil)
+    }
+    
+    public func perform<T>(request: OpenAIKit.DelegatedRequest) async throws -> T where T : Decodable {
+        
+        let uri = URI(scheme: request.scheme, host: request.host, path: request.path)
+        
+        var headers = request.headers
+        for (key, value) in configuration.headers {
+            headers[key] = value
+        }
+        
+        let response = try await client.send(HTTPMethod(rawValue: request.method), headers: HTTPHeaders(headers.map({($0.0, $0.1)})), to: uri, beforeSend: {
+            if let bodyData = request.body {
+                $0.body = ByteBuffer(data: bodyData)
+            }
+        })
+        
+        guard var byteBuffer = response.body, let responseData = byteBuffer.readData(length: byteBuffer.readableBytes) else {
+            throw VaporDelegatedRequestHandlerError.responseBodyMissing
+        }
+        
+        decoder.keyDecodingStrategy = request.keyDecodingStrategy
+        decoder.dateDecodingStrategy = request.dateDecodingStrategy
+
+        do {
+            return try decoder.decode(T.self, from: responseData)
+        } catch {
+            let error = try decoder.decode(APIErrorResponse.self, from: responseData)
+            log.error("\(error)")
+            throw Abort(.internalServerError, reason: error.reason)
+        }
+    }
+    
+    public func stream<T>(request: OpenAIKit.DelegatedRequest) async throws -> AsyncThrowingStream<T, Error> where T : Decodable {
+        fatalError("Streaming not supported with Vapor")
+    }
+}
+
+
+extension APIErrorResponse: DebuggableError, CustomStringConvertible, LocalizedError {
+    public var identifier: String {
+        "\(Self.self)"
+    }
+    
+    public var reason: String {
+        "ERROR (\(error.type)) - \(error.message)"
+    }
+    
+    public var errorDescription: String? {
+        "ERROR (\(error.type)) - \(error.message)"
     }
 }

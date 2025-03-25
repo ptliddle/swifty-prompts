@@ -90,8 +90,11 @@ public struct JSONSchemaPromptRunner<OutputType: ProducesJSONSchema>: PromptRunn
 public struct BasicPromptRunner: PromptRunner {
     
     public typealias OutputType = String
+    private let apiType: APIType
     
-    public init() {}
+    public init(apiType: APIType = .standard) {
+        self.apiType = apiType
+    }
     
     public func run(promptTemplate: PromptTemplate, on llm: LLM) async throws -> (usage: Usage, output: String, runTime: TimeInterval?) {
         return try await self.run(with: [.user(.text(promptTemplate.text))], on: llm)
@@ -100,7 +103,7 @@ public struct BasicPromptRunner: PromptRunner {
     public func run(with messages: [Message], on llm: LLM) async throws -> (usage: Usage, output: String, runTime: TimeInterval?) {
    
         let start = Date.now
-        let llmResult = try await llm.infer(messages: messages, stops: [], responseFormat: .text, apiType: .standard)
+        let llmResult = try await llm.infer(messages: messages, stops: [], responseFormat: .text, apiType: apiType)
         let timeToRunSeconds = Date.now.timeIntervalSince1970 - start.timeIntervalSince1970
         
         let output = llmResult?.rawText as? OutputType ?? ""

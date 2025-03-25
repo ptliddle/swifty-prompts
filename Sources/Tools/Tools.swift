@@ -47,4 +47,26 @@ public struct Tools {
     public func createFirecrawlMCPStdioClient(executableURL: URL, arguments: [String] = [], environment: [String: String]? = nil) throws -> FirecrawlMCPStdioClient {
         return try FirecrawlMCPStdioClient(executableURL: executableURL, arguments: arguments, environment: environment)
     }
+    
+    /// Create a new NodeJS client for interacting with Node.js modules
+    /// - Parameters:
+    ///   - nodeExecutable: URL of the Node.js executable (e.g., /usr/local/bin/node)
+    ///   - bridgeScriptURL: URL of the bridge script that interfaces between Swift and Node.js
+    ///   - moduleDir: Optional directory containing the Node.js modules to be used
+    ///   - environment: Optional environment variables to set for the process
+    /// - Returns: A configured NodeJSClient
+    public func createNodeJSClient(nodeExecutable: URL, bridgeScriptURL: URL, moduleDir: URL? = nil, environment: [String: String]? = nil) throws -> NodeJSClient {
+        
+        return try NodeJSClient(executableURL: nodeExecutable, bridgeScriptURL: bridgeScriptURL, moduleDir: moduleDir, environment: environment)
+    }
+    
+    /// Create a new Markmap client for transforming Markdown to mindmaps
+    /// - Parameters:
+    ///   - nodeExecutable: URL of the Node.js executable (e.g., /usr/local/bin/node)
+    ///   - moduleDir: Optional directory containing the Node.js modules (should have markmap-lib installed)
+    ///   - environment: Optional environment variables to set for the process
+    /// - Returns: A configured MarkmapClient
+    public func createMarkmapClient(nodeExecutable: URL, moduleDir: URL? = nil, environment: [String: String]? = nil) throws -> MarkmapClient {
+        return try MarkmapClient(nodeExecutable: nodeExecutable, moduleDir: moduleDir, environment: environment)
+    }
 }

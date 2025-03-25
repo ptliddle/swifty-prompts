@@ -64,15 +64,6 @@
       }
     },
     {
-      "identity" : "openai-kit",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/ptliddle/openai-kit.git",
-      "state" : {
-        "branch" : "main",
-        "revision" : "8070c5e5b0acec5ddb4b5f5062e8d73010d04dcc"
-      }
-    },
-    {
       "identity" : "routing-kit",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/vapor/routing-kit.git",

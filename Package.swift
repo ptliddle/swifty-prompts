@@ -29,7 +29,8 @@ let package = Package(
                  targets: ["SwiftyPrompts.VaporSupport"])
     ], dependencies: [
         // 💧 A server-side Swift web framework.
-        .package(url: "https://github.com/ptliddle/openai-kit.git", branch: "main"),
+//        .package(url: "https://github.com/ptliddle/openai-kit.git", branch: "main"),
+        .package(path: "../../Libraries/openai-kit"),
         .package(url: "https://github.com/ptliddle/swifty-json-schema.git", branch: "main"),
         .package(url: "https://github.com/jamesrochabrun/SwiftAnthropic.git", from: "1.8.0"),
         
@@ -38,9 +39,10 @@ let package = Package(
         .package(url: "https://github.com/huggingface/swift-transformers", from: "0.1.13"),
         .package(url: "https://github.com/1024jp/GzipSwift", "6.0.1" ... "6.0.1"),
         .package(url: "https://github.com/apple/swift-async-algorithms", from: "1.0.0"),
-        .package(url: "https://github.com/vapor/vapor.git", from: "4.83.1")
-//        .package(path: "../../Libraries/openai-kit"),
+        .package(url: "https://github.com/vapor/vapor.git", from: "4.83.1"),
 //        .package(path: "../SwiftyJsonSchema"),
+        // Swift logging API
+        .package(url: "https://github.com/apple/swift-log.git", from: "1.6.0"),
 
     ],
     targets: [
@@ -57,6 +59,7 @@ let package = Package(
             name: "SwiftyPrompts",
             dependencies: [
                 .product(name: "SwiftyJsonSchema", package: "swifty-json-schema"),
+                .product(name: "Logging", package: "swift-log"),
             ]
         ),
         .target(
@@ -64,6 +67,7 @@ let package = Package(
             dependencies: [
                 "SwiftyPrompts",
                 .product(name: "OpenAIKit", package: "openai-kit"),
+                .product(name: "Logging", package: "swift-log"),
             ],
             path: "Sources/Integrations",
             sources: [
@@ -118,7 +122,10 @@ let package = Package(
             dependencies: [
                 "SwiftyPrompts"
             ],
-            path: "Sources/Tools"
+            path: "Sources/Tools",
+            resources: [
+                .copy("NodeJS/bridge.js")
+            ]
         ),
         .target(
             name: "SwiftyPrompts.VaporSupport",
@@ -139,7 +146,8 @@ let package = Package(
                            "SwiftyPrompts.Tools",
                            .product(name: "OpenAIKit", package: "openai-kit")],
             resources: [
-                .process("Resources/test.pdf")
+                .process("Resources/test.pdf"),
+                .copy("Resources/bridge.js")
             ]
         )
     ]
