@@ -167,7 +167,7 @@ public class OpenAILLM: LLM {
                 try? httpClient.syncShutdown()
             }
             
-            let openAIClient = OpenAIKit.Client(httpClient: httpClient, configuration: configuration)
+            openAIClient = OpenAIKit.Client(httpClient: httpClient, configuration: configuration)
 #else
             logInfo("Using URLSession for OpenAIKit communication")
             let session = URLSession(configuration: .default)
