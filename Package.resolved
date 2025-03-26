@@ -64,6 +64,15 @@
       }
     },
     {
+      "identity" : "openai-kit",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/ptliddle/openai-kit.git",
+      "state" : {
+        "branch" : "wip/add-responses-api",
+        "revision" : "103e382e011ebfbe9ed78d901835f4de1e5e13c6"
+      }
+    },
+    {
       "identity" : "routing-kit",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/vapor/routing-kit.git",

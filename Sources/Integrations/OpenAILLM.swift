@@ -7,7 +7,7 @@
 
 import Foundation
 
-#if os(Linux)
+#if USE_NIO
 import NIOPosix
 import AsyncHTTPClient
 import NIOCore
@@ -129,7 +129,7 @@ public class OpenAILLM: LLM {
     
     var requestHandler: DelegatedRequestHandler? = nil
     
-#if os(Linux)
+#if USE_NIO
     static let eventLoopGroup: MultiThreadedEventLoopGroup = MultiThreadedEventLoopGroup(numberOfThreads: System.coreCount)
 #endif
     
@@ -159,7 +159,7 @@ public class OpenAILLM: LLM {
             openAIClient = OpenAIKit.Client(delegatedHandler: delegatedHandler)
         } 
         else {
-#if os(Linux)
+#if USE_NIO
             logInfo("Using HTTPClient for OpenAIKit communication")
             let httpClient = HTTPClient(eventLoopGroupProvider: .shared(Self.eventLoopGroup))
             defer {
@@ -167,7 +167,7 @@ public class OpenAILLM: LLM {
                 try? httpClient.syncShutdown()
             }
             
-            let openAIClient = OpenAIKit.Client(httpClient: httpClient, configuration: configuration)
+            openAIClient = OpenAIKit.Client(httpClient: httpClient, configuration: configuration)
 #else
             logInfo("Using URLSession for OpenAIKit communication")
             let session = URLSession(configuration: .default)
@@ -200,8 +200,6 @@ public class OpenAILLM: LLM {
             
             (output, usage) = (processedOutput, intUsage)
         }
-        
-       
         
         return SwiftyPrompts.LLMOutput(rawText: output, usage: usage)
     }

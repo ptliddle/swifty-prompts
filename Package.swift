@@ -3,6 +3,17 @@
 
 import PackageDescription
 
+let forceUSENIO = false
+let forceUSENIOSwiftSetting = {
+    if forceUSENIO {
+        SwiftSetting.define("USE_NIO")
+    }
+    else {
+        SwiftSetting.define("USE_NIO", .when(platforms: [.linux]))
+    }
+}()
+
+
 let package = Package(
     name: "SwiftyPrompts",
     platforms: [
@@ -60,7 +71,8 @@ let package = Package(
             dependencies: [
                 .product(name: "SwiftyJsonSchema", package: "swifty-json-schema"),
                 .product(name: "Logging", package: "swift-log"),
-            ]
+            ],
+            swiftSettings: [forceUSENIOSwiftSetting]
         ),
         .target(
             name: "SwiftyPrompts.OpenAI",
@@ -72,7 +84,8 @@ let package = Package(
             path: "Sources/Integrations",
             sources: [
                 "OpenAILLM.swift"
-            ]
+            ],
+            swiftSettings: [forceUSENIOSwiftSetting]
         ),
         .target(
             name: "SwiftyPrompts.Anthropic",
@@ -83,7 +96,8 @@ let package = Package(
             path: "Sources/Integrations",
             sources: [
                 "AnthropicLLM.swift"
-            ]
+            ],
+            swiftSettings: [forceUSENIOSwiftSetting]
         ),
         .target(
             name: "SwiftyPrompts.xAI",
@@ -94,7 +108,8 @@ let package = Package(
             path: "Sources/Integrations",
             sources: [
                 "xAILLM.swift"
-            ]
+            ],
+            swiftSettings: [forceUSENIOSwiftSetting]
         ),
         .target(
             name: "SwiftyPrompts.Local",
@@ -115,7 +130,8 @@ let package = Package(
             ], sources: [
                 "MLXLLM",
                 "Integrations/LocalLLM.swift"
-            ]
+            ],
+            swiftSettings: [forceUSENIOSwiftSetting]
         ),
         .target(
             name: "SwiftyPrompts.Tools",
@@ -125,7 +141,8 @@ let package = Package(
             path: "Sources/Tools",
             resources: [
                 .copy("NodeJS/bridge.js")
-            ]
+            ],
+            swiftSettings: [forceUSENIOSwiftSetting]
         ),
         .target(
             name: "SwiftyPrompts.VaporSupport",
@@ -133,7 +150,8 @@ let package = Package(
                 .product(name: "Vapor", package: "vapor"),
                 "SwiftyPrompts"
             ],
-            path: "Sources/VaporSupport"
+            path: "Sources/VaporSupport",
+            swiftSettings: [forceUSENIOSwiftSetting]
         ),
         .testTarget(
             name: "SwiftyPromptsTests",
