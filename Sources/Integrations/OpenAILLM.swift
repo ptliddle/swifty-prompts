@@ -120,10 +120,20 @@ public class OpenAILLM: LLM {
         logger.info("\(text)")
     }
     
+    public enum ThinkingLevel: String, Codable {
+        case low
+        case medium
+        case high
+    }
+    
     let apiKey: String
     let model: ModelID
-    let temperature: Double
+    let temperature: Double?
     let baseUrl: String
+    
+    let maxOutputTokens: Int?
+    
+    let thinkingLevel: ThinkingLevel?
     
     let storeResponses: Bool = true
     
@@ -133,19 +143,23 @@ public class OpenAILLM: LLM {
     static let eventLoopGroup: MultiThreadedEventLoopGroup = MultiThreadedEventLoopGroup(numberOfThreads: System.coreCount)
 #endif
     
-    public init(with requestHandler: DelegatedRequestHandler, baseUrl: String = "api.openai.com", apiKey: String, model: ModelID = Model.GPT4.gpt4o, temperature: Double = 0.0, topP: Double = 1.0) {
+    public init(with requestHandler: DelegatedRequestHandler, baseUrl: String = "api.openai.com", apiKey: String, model: ModelID = Model.GPT4.gpt4o, temperature: Double? = 0.0, topP: Double = 1.0, thinkingLevel: ThinkingLevel? = .medium, maxOutputTokens: Int? = 10000) {
         self.apiKey = apiKey
         self.model = model
         self.temperature = temperature
         self.baseUrl = baseUrl
         self.requestHandler = requestHandler
+        self.thinkingLevel = thinkingLevel
+        self.maxOutputTokens = maxOutputTokens
     }
 
-    public init(baseUrl: String = "api.openai.com", apiKey: String, model: ModelID = Model.GPT4.gpt4o, temperature: Double = 0.0, topP: Double = 1.0) {
+    public init(baseUrl: String = "api.openai.com", apiKey: String, model: ModelID = Model.GPT4.gpt4o, temperature: Double? = 0.0, topP: Double = 1.0, thinkingLevel: ThinkingLevel? = .medium, maxOutputTokens: Int? = 10000) {
         self.apiKey = apiKey
         self.model = model
         self.temperature = temperature
         self.baseUrl = baseUrl
+        self.thinkingLevel = thinkingLevel
+        self.maxOutputTokens = maxOutputTokens
     }
     
     public func infer(messages: [Message], stops: [String] = [], responseFormat: SwiftyPrompts.ResponseFormat, apiType: APIType = .standard) async throws -> SwiftyPrompts.LLMOutput? {
@@ -191,8 +205,8 @@ public class OpenAILLM: LLM {
             (output, usage) = (returnedOutput.content, intUsage)
         case .advanced:
             // Move this to a process function
-            let responseOutput = try await openAIClient.responses.create(model: model, messages: messages.asOpenAIResponseInput(), responseFormat: responseFormat.responseRequestFormat(), store: storeResponses)
-            let processedOutput = responseOutput.output.map({ $0.contentText }).joined(separator: "\n")
+            let responseOutput = try await openAIClient.responses.create(model: model, messages: messages.asOpenAIResponseInput(), temperature: temperature, responseFormat: responseFormat.responseRequestFormat(), store: storeResponses, reasoningEffort: thinkingLevel?.rawValue)
+            let processedOutput = responseOutput.output.compactMap({ $0.contentText }).joined(separator: "\n")
             
             
             let respUsage = responseOutput.usage

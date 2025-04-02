@@ -68,8 +68,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/ptliddle/openai-kit.git",
       "state" : {
-        "branch" : "wip/add-responses-api",
-        "revision" : "103e382e011ebfbe9ed78d901835f4de1e5e13c6"
+        "branch" : "setup-for-o1-thinking-models",
+        "revision" : "488f284e4e45edfd75d8ff0b455266a28013d80a"
       }
     },
     {
@@ -276,7 +276,7 @@
       "location" : "https://github.com/ptliddle/swifty-json-schema.git",
       "state" : {
         "branch" : "main",
-        "revision" : "595618b1b4b87bf500c980b26886ba1c5b7bd7d4"
+        "revision" : "c086cffa5439f0c7cbf871dba0b5d8c2102ab4ba"
       }
     },
     {

@@ -40,9 +40,11 @@ let package = Package(
                  targets: ["SwiftyPrompts.VaporSupport"])
     ], dependencies: [
         // 💧 A server-side Swift web framework.
-        .package(url: "https://github.com/ptliddle/openai-kit.git", branch: "wip/add-responses-api"),
+        .package(url: "https://github.com/ptliddle/openai-kit.git", branch: "setup-for-o1-thinking-models"),
 //        .package(path: "../../Libraries/openai-kit"),
         .package(url: "https://github.com/ptliddle/swifty-json-schema.git", branch: "main"),
+//        .package(path: "../swifty-json-schema"),
+        
         .package(url: "https://github.com/jamesrochabrun/SwiftAnthropic.git", from: "1.8.0"),
         
         // For local
@@ -51,7 +53,7 @@ let package = Package(
         .package(url: "https://github.com/1024jp/GzipSwift", "6.0.1" ... "6.0.1"),
         .package(url: "https://github.com/apple/swift-async-algorithms", from: "1.0.0"),
         .package(url: "https://github.com/vapor/vapor.git", from: "4.83.1"),
-//        .package(path: "../SwiftyJsonSchema"),
+
         // Swift logging API
         .package(url: "https://github.com/apple/swift-log.git", from: "1.6.0"),
 
@@ -69,6 +71,7 @@ let package = Package(
         .target(
             name: "SwiftyPrompts",
             dependencies: [
+//                "SwiftyJsonSchema",
                 .product(name: "SwiftyJsonSchema", package: "swifty-json-schema"),
                 .product(name: "Logging", package: "swift-log"),
             ],
@@ -157,6 +160,7 @@ let package = Package(
             name: "SwiftyPromptsTests",
             dependencies: ["SwiftyPrompts",
                            .product(name: "SwiftyJsonSchema", package: "swifty-json-schema"),
+//                           "SwiftyJsonSchema",
                            "SwiftyPrompts.OpenAI",
                            "SwiftyPrompts.Anthropic",
                            "SwiftyPrompts.xAI",
