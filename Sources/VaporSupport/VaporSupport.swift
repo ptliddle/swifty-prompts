@@ -83,14 +83,20 @@ public class VaporDelegatedRequestHandler: DelegatedRequestHandler {
         do {
             return try decoder.decode(T.self, from: responseData)
         }
-        catch let error as DecodingError {
-            log.error("Error on decoding was \(error), see if error response")
-            throw Abort(.internalServerError, reason: "Response decoding error")
-        }
         catch {
-            let apiError = try decoder.decode(APIErrorResponse.self, from: responseData)
-            log.error("\(apiError)")
-            throw Abort(.internalServerError, reason: apiError.reason)
+            // Save the error
+            let prevError = error
+            
+            // Try to decode as an API Error response
+            if let apiError = try? decoder.decode(APIErrorResponse.self, from: responseData) {
+                log.error("\(apiError)")
+                throw Abort(.internalServerError, reason: apiError.reason)
+            }
+            else {
+                // Failed to decode as APIError so log and return first decoding error
+                log.error("Error on decoding \(T.self) with \(error)")
+                throw Abort(.internalServerError, reason: "Response decoding error")
+            }
         }
     }
     
