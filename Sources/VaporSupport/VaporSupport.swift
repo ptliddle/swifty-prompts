@@ -11,7 +11,8 @@ import Vapor
 import OpenAIKit
 
 public struct VaporSender: RequestSender {
-    public var timeout: TimeInterval = 500.0
+    
+    public var timeout: TimePeriod = .seconds(500)
     
     public var baseURL: String = ""
     
@@ -25,7 +26,7 @@ public struct VaporSender: RequestSender {
     
     public func send(method: String, headers: [String : String], bodyData: Data) async throws -> Data {
         let clientRequest = ClientRequest(method: .POST, url: URI(string: baseURL), headers: HTTPHeaders(headers.map{$0}),
-                                          body: ByteBuffer(data: bodyData), timeout: .seconds(Int64(timeout)))
+                                          body: ByteBuffer(data: bodyData), timeout: .nanoseconds(timeout.inNanoseconds))
         
         let result = try await request.client.send(clientRequest)
         
@@ -43,18 +44,24 @@ public struct VaporSender: RequestSender {
 
 enum VaporDelegatedRequestHandlerError: Error {
     case responseBodyMissing
+    case noRequestData
+    case invalidHttpMethod
 }
 
 public class VaporDelegatedRequestHandler: DelegatedRequestHandler {
     
     public var configuration: OpenAIKit.Configuration
     var client: Vapor.Client
-    var log: Logger = Logger(label: "vapor delegated request logger")
-    var decoder = JSONDecoder()
+    var log: Logger
+    var decoder: JSONDecoder
     
-    public init(apiKey: String, client: Vapor.Client, logger: Logger) {
+    var timeout: TimePeriod?
+    
+    public init(apiKey: String, client: Vapor.Client, logger: Logger = Logger(label: "vapor delegated request logger"), decoder: JSONDecoder = JSONDecoder(), timeout: TimePeriod? = nil) {
         self.client = client
         self.log = logger
+        self.timeout = timeout
+        self.decoder = decoder
         self.configuration = OpenAIKit.Configuration(apiKey: apiKey, organization: nil, api: nil)
     }
     
@@ -67,11 +74,14 @@ public class VaporDelegatedRequestHandler: DelegatedRequestHandler {
             headers[key] = value
         }
         
-        let response = try await client.send(HTTPMethod(rawValue: request.method), headers: HTTPHeaders(headers.map({($0.0, $0.1)})), to: uri, beforeSend: {
-            if let bodyData = request.body {
-                $0.body = ByteBuffer(data: bodyData)
-            }
-        })
+        let httpMethod = HTTPMethod(rawValue: request.method)
+        
+        let bodyData = request.body.map({ ByteBuffer(data: $0) })
+        
+        let nanoseconds: Int64? = timeout?.inNanoseconds
+        let cReq = ClientRequest(method: httpMethod, url: uri, headers: HTTPHeaders(headers.map({($0.0, $0.1)})), body: bodyData, timeout: nanoseconds != nil ? .nanoseconds(nanoseconds!) : nil )
+        
+        let response = try await client.send(cReq)
         
         guard var byteBuffer = response.body, let responseData = byteBuffer.readData(length: byteBuffer.readableBytes) else {
             throw VaporDelegatedRequestHandlerError.responseBodyMissing

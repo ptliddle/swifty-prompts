@@ -3,7 +3,7 @@ import SwiftyPrompts
 
 struct DefaultURLSessionSender: RequestSender {
     
-    var timeout = 500.0
+    var timeout: SwiftyPrompts.TimePeriod = .seconds(500)
     var baseURL: String
     var apiKey: String
     
@@ -14,7 +14,7 @@ struct DefaultURLSessionSender: RequestSender {
         // Create URL request
         var request = URLRequest(url: URL(string: baseURL)!)
         request.httpMethod = "POST"
-        request.timeoutInterval = timeout
+        request.timeoutInterval = TimeInterval(timeout.inSeconds)
         
         // Set authorization header
         request.setValue("Basic \(apiKey)", forHTTPHeaderField: "Authorization")
