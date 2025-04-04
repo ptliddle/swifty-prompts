@@ -40,8 +40,8 @@ let package = Package(
                  targets: ["SwiftyPrompts.VaporSupport"])
     ], dependencies: [
         // 💧 A server-side Swift web framework.
-//        .package(url: "https://github.com/ptliddle/openai-kit.git", branch: "setup-for-o1-thinking-models"),
-        .package(path: "../../Libraries/openai-kit"),
+        .package(url: "https://github.com/ptliddle/openai-kit.git", branch: "setup-for-o1-thinking-models"),
+//        .package(path: "../../Libraries/openai-kit"),
         .package(url: "https://github.com/ptliddle/swifty-json-schema.git", branch: "main"),
 //        .package(path: "../swifty-json-schema"),
         
