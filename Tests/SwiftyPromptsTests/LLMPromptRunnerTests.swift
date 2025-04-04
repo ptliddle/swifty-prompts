@@ -44,6 +44,22 @@ final class LLMPromptRunnerTests: XCTestCase {
         
     }
     
+    func testBasicPromptRunnerWithImage() async throws {
+        let b = BasicPromptRunner()
+        
+        let url = Bundle.module.url(forResource: "logo", withExtension: "png")!
+        let imageData = try Data(contentsOf: url)
+        
+        let llmResult = try await b.run(with: [.user(.image(imageData, "png"))], on: llm)
+        
+        let output = llmResult.output
+        let usage = llmResult.usage
+        
+        print(output)
+        
+        XCTAssertEqual(output, "The capital of France is Paris.")
+    }
+    
     func testBasicPromptRunnerWithTextPrompt() async throws {
         let b = BasicPromptRunner()
         

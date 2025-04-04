@@ -10,6 +10,8 @@ import Foundation
 public enum Content {
     case text(String)
     case fileId(String)
+    case image(Data, String)
+    case imageUrl(String)
 }
 
 public enum Message {

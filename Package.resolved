@@ -64,15 +64,6 @@
       }
     },
     {
-      "identity" : "openai-kit",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/ptliddle/openai-kit.git",
-      "state" : {
-        "branch" : "setup-for-o1-thinking-models",
-        "revision" : "488f284e4e45edfd75d8ff0b455266a28013d80a"
-      }
-    },
-    {
       "identity" : "routing-kit",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/vapor/routing-kit.git",

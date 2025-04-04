@@ -22,15 +22,23 @@ public enum ContentError: Error {
     case invalidOutput
     case invalidOutputFormat
     case noMessages
+    case unexpectedOutput(String)
 }
 
-extension OpenAIKit.MessageContent {
+extension OpenAIKit.Response.MessageContent {
     init(from content: Content) {
         switch content {
         case .fileId(let fileId):
             self = .inputFile(fileId)
         case .text(let text):
             self = .inputText(text)
+        case let .image(data, imageType):
+            // Create base64 url
+            let base64Data = data.base64EncodedString()
+            let base64ImgUrl = "data:image/\(imageType);base64,\(base64Data)"
+            self = .inputImage(url: base64ImgUrl)
+        case let .imageUrl(url):
+            self = .inputImage(url: url)
         }
     }
 }
@@ -44,6 +52,23 @@ extension InputMessage.Role {
             self = .system
         case .user(_):
             self = .user
+        }
+    }
+}
+
+private extension Response.MessageContent {
+    init(with content: Content) {
+        switch content {
+        case .text(let text):
+            self = Response.MessageContent.inputText(text)
+        case .fileId(let fileId):
+            self = Response.MessageContent.inputFile(fileId)
+        case let .image(data, imageType):
+            let base64Data = data.base64EncodedString()
+            let base64ImgUrl = "data:image/\(imageType);base64,\(base64Data)"
+            self = Response.MessageContent.inputImage(url: base64ImgUrl)
+        case .imageUrl(let url):
+            self = Response.MessageContent.inputImage(url: url)
         }
     }
 }
@@ -65,7 +90,7 @@ private extension [Message] {
         
         let groupedMessages: [InputMessage.Role: [Message]] = Dictionary<InputMessage.Role, [Message]>.init(grouping: self, by: { InputMessage.Role.init(from: $0) })
   
-        let groupedContent: [InputMessage.Role: [MessageContent]]  = groupedMessages.mapValues({ $0.map({ MessageContent(from: $0.content) }) })
+        let groupedContent: [InputMessage.Role: [Response.MessageContent]]  = groupedMessages.mapValues({ $0.map({  Response.MessageContent(with: $0.content) }) })
         
         return groupedContent.map({ InputMessage.init(role: $0.key, content: $0.value) })
     }
@@ -79,7 +104,7 @@ private extension [Message] {
                 return Chat.Message.assistant(content: text)
             case let .user(content):
                 let text = try extractText(content)
-                return Chat.Message.user(content: text)
+                return Chat.Message.user(content: .text(text))
             case let .system(content):
                 let text = try extractText(content)
                 return Chat.Message.system(content: text)
@@ -202,7 +227,10 @@ public class OpenAILLM: LLM {
             let completion = try await openAIClient.chats.create(model: model, messages: messages.openAIFormat(), temperature: temperature, stops: stops, responseFormat: responseFormat.chatRequestFormat())
             let returnedOutput = completion.choices.first!.message
             let intUsage = SwiftyPrompts.Usage(promptTokens: completion.usage.promptTokens, completionTokens: completion.usage.completionTokens ?? 0, totalTokens: completion.usage.totalTokens)
-            (output, usage) = (returnedOutput.content, intUsage)
+            guard case let Chat.Message.MessageContent.text(text) = returnedOutput.content else {
+                throw ContentError.unexpectedOutput("Expected text but got something else \(returnedOutput.content.self)")
+            }
+            (output, usage) = (text, intUsage)
         case .advanced:
             // Move this to a process function
             let responseOutput = try await openAIClient.responses.create(model: model, messages: messages.asOpenAIResponseInput(), temperature: temperature, responseFormat: responseFormat.responseRequestFormat(), store: storeResponses, reasoningEffort: thinkingLevel?.rawValue)
