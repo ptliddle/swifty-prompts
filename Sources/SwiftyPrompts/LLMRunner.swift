@@ -17,11 +17,6 @@ public protocol LLM {
     func infer(messages: [Message], stops: [String], responseFormat: SwiftyPrompts.ResponseFormat, apiType: APIType) async throws -> SwiftyPrompts.LLMOutput?
 }
 
-public protocol ProducesJSONSchema: Codable {
-    associatedtype SchemaType: Codable
-    static var exampleValue: SchemaType { get set }
-}
-
 public protocol PromptRunner {
     associatedtype OutputType
     func run(promptTemplate: PromptTemplate, on llm: LLM) async throws -> (usage: Usage, output: OutputType, runTime: TimeInterval?)
