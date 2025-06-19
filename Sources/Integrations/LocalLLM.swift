@@ -258,7 +258,7 @@ enum LocalLLMError: Error {
     case unsupportedMediaType
 }
 
-fileprivate extension [Message] {
+fileprivate extension [SwiftyPrompts.Message] {
     
     /// Need output to be in format [["role": "user", "content": prompt]] for MLX local llms
     func localFormat() throws -> [[String: String]] {

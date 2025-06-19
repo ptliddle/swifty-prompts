@@ -55,20 +55,18 @@ open class AnthropicLLM: LLM {
     let model: SwiftAnthropic.Model
     let temperature: Double
     let maxTokensToSample = 1024
+    let baseUrl: String
 
-    public init(apiKey: String, model: SwiftAnthropic.Model, temperature: Double = 1.0) {
+    public init(baseUrl: String = "api.openai.com", apiKey: String, model: SwiftAnthropic.Model, temperature: Double = 1.0) {
         self.apiKey = apiKey
         self.model = model
         self.temperature = temperature
+        self.baseUrl = baseUrl
     }
-    
-    internal func createClient() -> AnthropicService {
-        return AnthropicServiceFactory.service(apiKey: apiKey, betaHeaders: nil)
-    }
-    
+
     public func infer(messages: [SwiftyPrompts.Message], stops: [String], responseFormat: SwiftyPrompts.ResponseFormat, apiType: SwiftyPrompts.APIType = .standard) async throws -> SwiftyPrompts.LLMOutput? {
         
-        let anthropicClient = createClient()
+        let anthropicClient = AnthropicServiceFactory.service(apiKey: apiKey, basePath: baseUrl, betaHeaders: nil)
         
         let constructSystemPrompt: () -> MessageParameter.System? = {
             guard let systemPromptText = messages.compactMap({ if case let .system(.text(text)) = $0 { return text }; return nil }).first else {

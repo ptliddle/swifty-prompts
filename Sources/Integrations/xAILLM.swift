@@ -60,21 +60,23 @@ fileprivate extension [Message] {
 
 open class xAILLM: LLM {
 
-    private let xAIAPIBasePath = "https://api.x.ai"
+    private static let xAIAPIBasePath = "https://api.x.ai"
     let apiKey: String
     let model: xAIModel
     let temperature: Double
     let maxTokensToSample = 1024
+    let baseUrl: String
 
-    public init(apiKey: String, model: xAIModel, temperature: Double = 1.0) {
+    public init(baseUrl: String? = nil, apiKey: String, model: xAIModel, temperature: Double = 1.0) {
         self.apiKey = apiKey
         self.model = model
         self.temperature = temperature
+        self.baseUrl = baseUrl ?? Self.xAIAPIBasePath
     }
     
     public func infer(messages: [SwiftyPrompts.Message], stops: [String], responseFormat: SwiftyPrompts.ResponseFormat, apiType: SwiftyPrompts.APIType = .standard) async throws -> SwiftyPrompts.LLMOutput? {
         
-        let xAIClient = AnthropicServiceFactory.service(apiKey: apiKey, basePath: xAIAPIBasePath, betaHeaders: nil)
+        let xAIClient = AnthropicServiceFactory.service(apiKey: apiKey, basePath: baseUrl, betaHeaders: nil)
         
         let constructSystemPrompt: () -> MessageParameter.System? = {
             guard let systemPromptText = messages.compactMap({ if case let .system(.text(text)) = $0 { return text }; return nil }).first else {
