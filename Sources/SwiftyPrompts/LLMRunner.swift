@@ -63,7 +63,7 @@ public struct JSONSchemaPromptRunner<OutputType: ProducesJSONSchema>: PromptRunn
     
     public func run(with messages: [Message], on llm: LLM) async throws -> (usage: Usage, output: OutputType, runTime: TimeInterval?) {
         
-        let schema = JsonSchemaCreator.createJSONSchema(for: OutputType.exampleValue)
+        let schema = try JSONSchemaGenerator().generateSchema(from: OutputType.self)
         
         let start = Date.now
         let llmResult = try await llm.infer(messages: messages, stops: [], responseFormat: ResponseFormat.jsonSchema(schema, "\(OutputType.self)"), apiType: apiType)
