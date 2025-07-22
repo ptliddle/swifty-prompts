@@ -103,8 +103,16 @@ private extension [Message] {
                 let text = try extractText(content)
                 return Chat.Message.assistant(content: text)
             case let .user(content):
-                let text = try extractText(content)
-                return Chat.Message.user(content: .text(text))
+                switch content {
+                case .text(let text):
+                    return Chat.Message.user(content: .text(text))
+                case let .image(data, type):
+                    return Chat.Message.user(content: .content([.image(data, type)]))
+                case let .imageUrl(url):
+                    return Chat.Message.user(content: .content([.imageUrl(url)]))
+                case let .fileId(fileId):
+                    return Chat.Message.user(content: .content([.text(fileId)]))
+                }
             case let .system(content):
                 let text = try extractText(content)
                 return Chat.Message.system(content: text)
