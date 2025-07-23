@@ -42,7 +42,7 @@ let package = Package(
         // 💧 A server-side Swift web framework.
         .package(url: "https://github.com/ptliddle/openai-kit.git", from: "0.1.0"),
 //        .package(path: "../../Libraries/openai-kit"),
-        .package(url: "https://github.com/ptliddle/swifty-json-schema.git", from: "0.1.0"),
+        .package(url: "https://github.com/ptliddle/swifty-json-schema.git", from: "0.2.2"),
 //        .package(path: "../swifty-json-schema"),
         
         .package(url: "https://github.com/jamesrochabrun/SwiftAnthropic.git", from: "1.8.0"),
