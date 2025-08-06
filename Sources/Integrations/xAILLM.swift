@@ -103,11 +103,15 @@ open class xAILLM: LLM {
             let usage = Usage(promptTokens: response.usage.inputTokens ?? 0, completionTokens: response.usage.outputTokens, totalTokens: (response.usage.inputTokens ?? 0) + response.usage.outputTokens)
             
             // We only support text based responses at the moment with Anthropic, filter out all others
-            let responseTexts = response.content.compactMap({ if case let MessageResponse.Content.text(text) = $0 { return text } else { return nil } })
-           
-            // Should only have 1 response in most situations but join it together when we don't
-            let responseText = responseTexts.joined(separator: "\n")
+            let responseTexts: [String] = response.content.compactMap({
+                if case let MessageResponse.Content.text(text, _) = $0 {
+                    return text
+                }
+                return nil
+            })
             
+            let responseText = String(responseTexts.joined(separator: "\n"))
+
             return LLMOutput(rawText: responseText, usage: usage)
         }
         catch {

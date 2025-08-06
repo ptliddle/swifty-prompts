@@ -42,12 +42,13 @@ let package = Package(
         // 💧 A server-side Swift web framework.
         .package(url: "https://github.com/ptliddle/openai-kit.git", from: "0.1.0"),
 //        .package(path: "../../Libraries/openai-kit"),
-        .package(url: "https://github.com/ptliddle/swifty-json-schema.git", from: "0.1.0"),
+        .package(url: "https://github.com/ptliddle/swifty-json-schema.git", from: "0.3.0"),
 //        .package(path: "../swifty-json-schema"),
+       
+        // 2.1.8 is the lowest version with Linux support
+        .package(url: "https://github.com/jamesrochabrun/SwiftAnthropic.git", from: "2.1.8"),
         
-        .package(url: "https://github.com/jamesrochabrun/SwiftAnthropic.git", from: "1.8.0"),
-        
-        // For local
+        // For local, does not work on linux as swift-transformers requires accelerate
         .package(url: "https://github.com/ml-explore/mlx-swift.git", from: "0.21.0"),
         .package(url: "https://github.com/huggingface/swift-transformers", exact: "0.1.13"),
         .package(url: "https://github.com/1024jp/GzipSwift", "6.0.1" ... "6.0.1"),
