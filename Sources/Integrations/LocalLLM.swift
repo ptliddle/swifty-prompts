@@ -9,6 +9,8 @@ import MLX
 import MLXRandom
 import Metal
 import Tokenizers
+import MLXLMCommon
+import MLXLLM
 
 import Hub
 import Foundation
@@ -103,7 +105,7 @@ struct ModelLoader {
     
     /// load and return the model -- can be called multiple times, subsequent calls will just return the loaded model
     /// Can also be used to download the model, just ignore the result
-    public func load() async throws -> AsyncThrowingStream<DownloadResult<(ModelContainer, ModelConfiguration)>, Error> {
+    public func load() async throws -> AsyncThrowingStream<DownloadResult<(ModelContext, ModelConfiguration)>, Error> {
         
         let modelConfiguration: ModelConfiguration
         
@@ -112,7 +114,7 @@ struct ModelLoader {
             modelConfiguration = ModelConfiguration(directory: URL(filePath: self.model))
         } else {
             // identifier
-            modelConfiguration = await ModelConfiguration.configuration(id: model)
+            modelConfiguration = ModelConfiguration(id: model) // await ModelConfiguration.configuration(id: model)
         }
         
         return AsyncThrowingStream { continuation in
@@ -122,16 +124,16 @@ struct ModelLoader {
             }
             
             Task {
-                let modelContainer: ModelContainer = try await {
+                let modelContext: ModelContext = try await {
                     if let modelStorageDirectory = baseModelsStorageDirectory {
-                        return try await loadModelContainer(hub: hubApi, configuration: modelConfiguration, progressHandler: progressHandler)
+                        return try await loadModel(hub: hubApi, configuration: modelConfiguration, progressHandler: progressHandler)
                     }
                     else {
-                        return try await loadModelContainer(hub: hubApi, configuration: modelConfiguration, progressHandler: progressHandler)
+                        return try await loadModel(hub: hubApi, configuration: modelConfiguration, progressHandler: progressHandler)
                     }
                 }()
                 
-                let loadResult = (modelContainer, modelConfiguration)
+                let loadResult = (modelContext, modelConfiguration)
                 continuation.yield(.result(loadResult))
                 continuation.finish()
             }
@@ -357,7 +359,7 @@ public class LocalLLM: LLM {
         
         memoryEval?.start()
         
-        let (modelContainer, modelConfiguration) = try await {
+        let (modelContext, modelConfiguration) = try await {
             for try await loaded in try await llmLoader.load() {
                 switch loaded {
                 case let .inProgress(progress):
@@ -369,12 +371,14 @@ public class LocalLLM: LLM {
             throw NSError(domain: "LoadModelErrorDomain", code: 1, userInfo: [NSLocalizedDescriptionKey: "Model loading did not return a result"])
         }()
         
+        let modelContainer = ModelContainer(context: modelContext)
+        
         let messages = try messages.localFormat()
         
         let promptTokens = try await modelContainer.perform { _, tokenizer in
             try tokenizer.applyChatTemplate(messages: messages)
         }
-        let (tokenizer, model) = (modelContainer.tokenizer, modelContainer.model)
+        let (tokenizer, model) = await (modelContext.tokenizer, modelContext.model)
         
         let generateParameters = GenerateParameters(temperature: temperature,
                                                     topP: topP,
@@ -383,7 +387,7 @@ public class LocalLLM: LLM {
         
         var detokenizer = NaiveStreamingDetokenizer(tokenizer: tokenizer)
         
-        let result = generate(promptTokens: promptTokens, parameters: generateParameters, model: model, tokenizer: tokenizer, extraEOSTokens: nil) { tokens in
+        let result = try generate(promptTokens: promptTokens, parameters: generateParameters, model: model, tokenizer: tokenizer, extraEOSTokens: nil) { tokens in
             
             if let last = tokens.last {
                 detokenizer.append(token: last)

@@ -17,7 +17,7 @@ let forceUSENIOSwiftSetting = {
 let package = Package(
     name: "SwiftyPrompts",
     platforms: [
-        .macOS("13.3"),
+        .macOS("14.0"),
         .iOS(.v16),
         .visionOS(.v1),
     ],
@@ -48,11 +48,19 @@ let package = Package(
         // 2.1.8 is the lowest version with Linux support
         .package(url: "https://github.com/jamesrochabrun/SwiftAnthropic.git", from: "2.1.8"),
         
+        // MARK: - Local LLM dependencies
         // For local, does not work on linux as swift-transformers requires accelerate
-        .package(url: "https://github.com/ml-explore/mlx-swift.git", from: "0.21.0"),
-        .package(url: "https://github.com/huggingface/swift-transformers", exact: "0.1.13"),
-        .package(url: "https://github.com/1024jp/GzipSwift", "6.0.1" ... "6.0.1"),
+        
+        // These are now all imported by mlx-swift-examples, the libraries
+//        .package(url: "https://github.com/ml-explore/mlx-swift.git", from: "0.25.0"),
+//        .package(url: "https://github.com/huggingface/swift-transformers", exact: "0.1.22"),
+//        .package(url: "https://github.com/1024jp/GzipSwift", "6.0.1" ... "6.1.0"),
+        
         .package(url: "https://github.com/apple/swift-async-algorithms", from: "1.0.0"),
+        .package(url: "https://github.com/ml-explore/mlx-swift-examples.git", from: "2.25.0"),
+        
+        
+        // MARK: Vapor support dependencies
         .package(url: "https://github.com/vapor/vapor.git", from: "4.83.1"),
 
         // Swift logging API
@@ -119,12 +127,15 @@ let package = Package(
             name: "SwiftyPrompts.Local",
             dependencies: [
                 "SwiftyPrompts",
-                .product(name: "MLX", package: "mlx-swift"),
-                .product(name: "MLXRandom", package: "mlx-swift"),
-                .product(name: "MLXNN", package: "mlx-swift"),
-                .product(name: "MLXOptimizers", package: "mlx-swift"),
-                .product(name: "Transformers", package: "swift-transformers"),
-                .product(name: "MLXFFT", package: "mlx-swift")
+                // All now imported through MLXLLM and MLXLMCommon in the swift-examples package
+//                .product(name: "MLX", package: "mlx-swift"),
+//                .product(name: "MLXRandom", package: "mlx-swift"),
+//                .product(name: "MLXNN", package: "mlx-swift"),
+//                .product(name: "MLXOptimizers", package: "mlx-swift"),ama
+//                .product(name: "Transformers", package: "swift-transformers"),
+//                .product(name: "MLXFFT", package: "mlx-swift"),
+                .product(name: "MLXLLM", package: "mlx-swift-examples"),
+                .product(name: "MLXLMCommon", package: "mlx-swift-examples")
             ],
             path: "Sources",
             exclude: [
