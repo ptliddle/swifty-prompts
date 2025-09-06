@@ -13,12 +13,14 @@ public enum AnthropicError: Error, CustomStringConvertible {
     case unknownModel
     case unsupportedMediaType
     case apiError(description: String)
+    case notAnAnthropicModel(String)
     
     public var description: String {
         switch self {
         case .unknownModel: "Unknown model used with Anthropic"
         case .unsupportedMediaType: "You tried to use an unsupported media type in a request"
         case .apiError(let description): "The API returned an error \(description)"
+        case .notAnAnthropicModel(let model): "The model \(model) is not an anthropic model"
         }
     }
 }
@@ -55,9 +57,9 @@ open class AnthropicLLM: LLM {
     let model: SwiftAnthropic.Model
     let temperature: Double
     let maxTokensToSample = 1024
-    let baseUrl: String
+    let baseUrl: String?
 
-    public init(baseUrl: String = "api.openai.com", apiKey: String, model: SwiftAnthropic.Model, temperature: Double = 1.0) {
+    public init(baseUrl: String? = nil, apiKey: String, model: SwiftAnthropic.Model, temperature: Double = 1.0) {
         self.apiKey = apiKey
         self.model = model
         self.temperature = temperature
@@ -66,7 +68,15 @@ open class AnthropicLLM: LLM {
 
     public func infer(messages: [SwiftyPrompts.Message], stops: [String], responseFormat: SwiftyPrompts.ResponseFormat, apiType: SwiftyPrompts.APIType = .standard) async throws -> SwiftyPrompts.LLMOutput? {
         
-        let anthropicClient = AnthropicServiceFactory.service(apiKey: apiKey, basePath: baseUrl, betaHeaders: nil)
+        let anthropicClient = {
+            if let baseUrl = self.baseUrl {
+                return AnthropicServiceFactory.service(apiKey: self.apiKey, basePath: baseUrl, betaHeaders: nil)
+            }
+            else {
+                return AnthropicServiceFactory.service(apiKey: self.apiKey, betaHeaders: nil)
+            }
+        }()
+
         
         let constructSystemPrompt: () -> MessageParameter.System? = {
             guard let systemPromptText = messages.compactMap({ if case let .system(.text(text)) = $0 { return text }; return nil }).first else {
