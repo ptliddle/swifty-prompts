@@ -11,8 +11,12 @@ import Foundation
 import SwiftAnthropic
 import SwiftyPrompts
 
-public enum xAIModel: String {
+public typealias XModelID = String
+
+public enum XAIModel: XModelID, CaseIterable {
     case grok2
+    case grok3
+    case grok4
     case grok2mini = "grok2-mini"
     case grokBeta = "grok-beta"
 }
@@ -62,12 +66,12 @@ open class xAILLM: LLM {
 
     private static let xAIAPIBasePath = "https://api.x.ai"
     let apiKey: String
-    let model: xAIModel
+    let model: XModelID
     let temperature: Double
     let maxTokensToSample = 1024
     let baseUrl: String
 
-    public init(baseUrl: String? = nil, apiKey: String, model: xAIModel, temperature: Double = 1.0) {
+    public init(baseUrl: String? = nil, apiKey: String, model: XModelID, temperature: Double = 1.0) {
         self.apiKey = apiKey
         self.model = model
         self.temperature = temperature
@@ -95,7 +99,7 @@ open class xAILLM: LLM {
         let anthropicMessages = try otherMessages.anthropicFormat()
         
         
-        let parameters = MessageParameter(model: .other(model.rawValue), messages: anthropicMessages, maxTokens: maxTokensToSample, system: constructSystemPrompt())
+        let parameters = MessageParameter(model: .other(model), messages: anthropicMessages, maxTokens: maxTokensToSample, system: constructSystemPrompt())
         
         do {
             let response = try await xAIClient.createMessage(parameters)
