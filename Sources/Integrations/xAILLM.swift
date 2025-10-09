@@ -64,14 +64,17 @@ fileprivate extension [Message] {
 
 open class xAILLM: LLM {
 
-    private static let xAIAPIBasePath = "https://api.x.ai"
+    public static let xAIAPIBasePath = "https://api.x.ai"
+    
     let apiKey: String
     let model: XModelID
     let temperature: Double
     let maxTokensToSample = 1024
     let baseUrl: String
+    let httpClient: HTTPClient?
 
-    public init(baseUrl: String? = nil, apiKey: String, model: XModelID, temperature: Double = 1.0) {
+    public init(httpClient: HTTPClient? = nil, baseUrl: String = xAILLM.xAIAPIBasePath, apiKey: String, model: XModelID, temperature: Double = 1.0) {
+        self.httpClient = httpClient
         self.apiKey = apiKey
         self.model = model
         self.temperature = temperature
@@ -79,8 +82,15 @@ open class xAILLM: LLM {
     }
     
     public func infer(messages: [SwiftyPrompts.Message], stops: [String], responseFormat: SwiftyPrompts.ResponseFormat, apiType: SwiftyPrompts.APIType = .standard) async throws -> SwiftyPrompts.LLMOutput? {
-        
-        let xAIClient = AnthropicServiceFactory.service(apiKey: apiKey, basePath: baseUrl, betaHeaders: nil)
+
+        let xAIClient = {
+            if let httpClient = self.httpClient {
+                return AnthropicServiceFactory.service(apiKey: self.apiKey, betaHeaders: nil, httpClient: httpClient)
+            }
+            else {
+                return AnthropicServiceFactory.service(apiKey: self.apiKey, basePath: baseUrl, betaHeaders: nil)
+            }
+        }()
         
         let constructSystemPrompt: () -> MessageParameter.System? = {
             guard let systemPromptText = messages.compactMap({ if case let .system(.text(text)) = $0 { return text }; return nil }).first else {

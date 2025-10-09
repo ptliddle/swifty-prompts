@@ -9,17 +9,21 @@ import Foundation
 import SwiftAnthropic
 import SwiftyPrompts
 
-public enum AnthropicError: Error, CustomStringConvertible {
+public enum AnthropicError: Error, CustomStringConvertible, LocalizedError {
     case unknownModel
     case unsupportedMediaType
     case apiError(description: String)
     case notAnAnthropicModel(String)
     
+    public var errorDescription: String? {
+        return description
+    }
+    
     public var description: String {
         switch self {
         case .unknownModel: "Unknown model used with Anthropic"
         case .unsupportedMediaType: "You tried to use an unsupported media type in a request"
-        case .apiError(let description): "The API returned an error \(description)"
+        case .apiError(let description): "The API returned an error: \(description)"
         case .notAnAnthropicModel(let model): "The model \(model) is not an anthropic model"
         }
     }
@@ -58,8 +62,11 @@ open class AnthropicLLM: LLM {
     let temperature: Double
     let maxTokensToSample = 1024
     let baseUrl: String?
+    
+    let httpClient: HTTPClient?
 
-    public init(baseUrl: String? = nil, apiKey: String, model: SwiftAnthropic.Model, temperature: Double = 1.0) {
+    public init(httpClient: HTTPClient? = nil, baseUrl: String? = nil, apiKey: String, model: SwiftAnthropic.Model, temperature: Double = 1.0) {
+        self.httpClient = httpClient
         self.apiKey = apiKey
         self.model = model
         self.temperature = temperature
@@ -69,7 +76,10 @@ open class AnthropicLLM: LLM {
     public func infer(messages: [SwiftyPrompts.Message], stops: [String], responseFormat: SwiftyPrompts.ResponseFormat, apiType: SwiftyPrompts.APIType = .standard) async throws -> SwiftyPrompts.LLMOutput? {
         
         let anthropicClient = {
-            if let baseUrl = self.baseUrl {
+            if let httpClient = self.httpClient {
+                return AnthropicServiceFactory.service(apiKey: self.apiKey, betaHeaders: nil, httpClient: httpClient)
+            }
+            else if let baseUrl = self.baseUrl {
                 return AnthropicServiceFactory.service(apiKey: self.apiKey, basePath: baseUrl, betaHeaders: nil)
             }
             else {
