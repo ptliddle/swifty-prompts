@@ -172,11 +172,13 @@ public class OpenAILLM: LLM {
     
     var requestHandler: DelegatedRequestHandler? = nil
     
+    var systemPromptPrefix: String? = nil
+    
 #if USE_NIO
     static let eventLoopGroup: MultiThreadedEventLoopGroup = MultiThreadedEventLoopGroup(numberOfThreads: System.coreCount)
 #endif
     
-    public init(with requestHandler: DelegatedRequestHandler, baseUrl: String = "api.openai.com", apiKey: String, model: ModelID = Model.GPT4.gpt4o, temperature: Double? = 0.0, topP: Double = 1.0, thinkingLevel: ThinkingLevel? = .medium, maxOutputTokens: Int? = 10000) {
+    public init(with requestHandler: DelegatedRequestHandler, baseUrl: String = "api.openai.com", apiKey: String, model: ModelID = Model.GPT4.gpt4o, systemPromptPrefix: String? = nil, temperature: Double? = 0.0, topP: Double = 1.0, thinkingLevel: ThinkingLevel? = .medium, maxOutputTokens: Int? = 10000) {
         self.apiKey = apiKey
         self.model = model
         self.temperature = temperature
@@ -184,18 +186,26 @@ public class OpenAILLM: LLM {
         self.requestHandler = requestHandler
         self.thinkingLevel = thinkingLevel
         self.maxOutputTokens = maxOutputTokens
+        self.systemPromptPrefix = systemPromptPrefix
     }
 
-    public init(baseUrl: String = "api.openai.com", apiKey: String, model: ModelID = Model.GPT4.gpt4o, temperature: Double? = 0.0, topP: Double = 1.0, thinkingLevel: ThinkingLevel? = .medium, maxOutputTokens: Int? = 10000) {
+    public init(baseUrl: String = "api.openai.com", apiKey: String, model: ModelID = Model.GPT4.gpt4o, systemPromptPrefix: String? = nil, temperature: Double? = 0.0, topP: Double = 1.0, thinkingLevel: ThinkingLevel? = .medium, maxOutputTokens: Int? = 10000) {
         self.apiKey = apiKey
         self.model = model
         self.temperature = temperature
         self.baseUrl = baseUrl
         self.thinkingLevel = thinkingLevel
         self.maxOutputTokens = maxOutputTokens
+        self.systemPromptPrefix = systemPromptPrefix
     }
     
     public func infer(messages: [Message], stops: [String] = [], responseFormat: SwiftyPrompts.ResponseFormat, apiType: APIType = .standard) async throws -> SwiftyPrompts.LLMOutput? {
+        
+        // Add system prompt prefix
+        var messages: [Message] = messages
+        if let systemPromptPrefix = self.systemPromptPrefix {
+            messages = [.system(.text(systemPromptPrefix))] + messages
+        }
         
         let configuration = Configuration(apiKey: apiKey, api: API(scheme: .https, host: baseUrl))
         
