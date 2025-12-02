@@ -287,6 +287,10 @@ fileprivate extension [SwiftyPrompts.Message] {
             case let .user(content), let .system(content):
                 let text = try extractText(content)
                 return ["role": "user", "content": text]
+            case .tool(_):
+                fatalError("Tools not currently supported on local models")
+            case .thinking(_):
+                fatalError("Reasoning not currently supported on local models")
             }
         })
     }

@@ -56,12 +56,19 @@ fileprivate extension [Message] {
             case let .user(content), let .system(content):
                 let text = try extractText(content)
                 return MessageParameter.Message.init(role: .user, content: .text(text))
+            case .tool(_):
+#warning("Implement tool to message")
+fatalError("Needs to be implemented")
+            case .thinking(_):
+#warning("Implement reasoning to message")
+                fatalError("Reasoning not currently supported on X AI")
             }
         })
     }
 }
 
 
+#warning("This should probably just subclass the Anthropic LLM and override relevant pieces")
 open class xAILLM: LLM {
 
     public static let xAIAPIBasePath = "https://api.x.ai"

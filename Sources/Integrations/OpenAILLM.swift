@@ -16,6 +16,7 @@ import NIOCore
 import OpenAIKit
 import SwiftyPrompts
 import Logging
+import SwiftyJsonSchema
 
 public enum ContentError: Error {
     case unsupportedMediaType
@@ -23,25 +24,12 @@ public enum ContentError: Error {
     case invalidOutputFormat
     case noMessages
     case unexpectedOutput(String)
+    case notAValidToolCall
+    case corruptedToolOuput
+    case notAValidReasoningItem
 }
 
-extension OpenAIKit.Response.MessageContent {
-    init(from content: Content) {
-        switch content {
-        case .fileId(let fileId):
-            self = .inputFile(fileId)
-        case .text(let text):
-            self = .inputText(text)
-        case let .image(data, imageType):
-            // Create base64 url
-            let base64Data = data.base64EncodedString()
-            let base64ImgUrl = "data:image/\(imageType);base64,\(base64Data)"
-            self = .inputImage(url: base64ImgUrl)
-        case let .imageUrl(url):
-            self = .inputImage(url: url)
-        }
-    }
-}
+
 
 extension InputMessage.Role {
     init(from message: Message) {
@@ -52,23 +40,10 @@ extension InputMessage.Role {
             self = .system
         case .user(_):
             self = .user
-        }
-    }
-}
-
-private extension Response.MessageContent {
-    init(with content: Content) {
-        switch content {
-        case .text(let text):
-            self = Response.MessageContent.inputText(text)
-        case .fileId(let fileId):
-            self = Response.MessageContent.inputFile(fileId)
-        case let .image(data, imageType):
-            let base64Data = data.base64EncodedString()
-            let base64ImgUrl = "data:image/\(imageType);base64,\(base64Data)"
-            self = Response.MessageContent.inputImage(url: base64ImgUrl)
-        case .imageUrl(let url):
-            self = Response.MessageContent.inputImage(url: url)
+        case .tool(_):
+            self = .user // not used
+        case .thinking(_):
+            fatalError("Reasoning is not used as an InputMessage, something used incorrectly")
         }
     }
 }
@@ -84,20 +59,9 @@ private extension [Message] {
         }
     }
     
-    // WRITTEN WITH AI, CLEAN UP
-    public func asOpenAIResponseInput() throws -> [InputMessage] {
+    public func openAIChatFormat() throws -> [Chat.Message] {
         
-        
-        let groupedMessages: [InputMessage.Role: [Message]] = Dictionary<InputMessage.Role, [Message]>.init(grouping: self, by: { InputMessage.Role.init(from: $0) })
-  
-        let groupedContent: [InputMessage.Role: [Response.MessageContent]]  = groupedMessages.mapValues({ $0.map({  Response.MessageContent(with: $0.content) }) })
-        
-        return groupedContent.map({ InputMessage.init(role: $0.key, content: $0.value) })
-    }
-    
-    public func openAIFormat() throws -> [Chat.Message] {
-        
-        return try self.map({
+        return try self.compactMap({
             switch $0 {
             case let .ai(content):
                 let text = try extractText(content)
@@ -112,12 +76,101 @@ private extension [Message] {
                     return Chat.Message.user(content: .content([.imageUrl(url)]))
                 case let .fileId(fileId):
                     return Chat.Message.user(content: .content([.text(fileId)]))
+                case .object(let json):
+                    print(json)
+                    return nil
                 }
             case let .system(content):
                 let text = try extractText(content)
                 return Chat.Message.system(content: text)
+            case .tool(_):
+                fatalError("Tool cannot be encoded for a chat message, you need to use the advanced repsonses API")
+            case .thinking(let reasoning):
+                return nil // This isn't returned as a message
             }
         })
+    }
+    
+    public func openAIResponsesInputFormat() throws -> [OpenAIKit.InputItem] {
+        
+        let decoder = JSONDecoder()
+        
+        let result: [OpenAIKit.InputItem] = try self.reduce(into: [InputItem](), { inputItems, message in
+            switch message {
+            case let .ai(content):
+                let text = try extractText(content)
+                let item = InputItem.message(.init(role: .assistant, content: [.outputText(text)]))
+                inputItems.append(item)
+            case let .user(content):
+                switch content {
+                case .text(let text):
+                    inputItems.append( InputItem.message(.init(role: .user, content: [.inputText(text)])))
+                case let .image(data, type):
+                    fatalError("Image as data not currently supported, copy logic from ChatMessage.MessageContent.image")
+                case let .imageUrl(url):
+                    inputItems.append( InputItem.message(InputMessage(role: .user, content: [.inputImage(url: url)])))
+                case let .fileId(fileId):
+                    inputItems.append( InputItem.message(InputMessage(role: .user, content: [.inputFile(fileId)])))
+                case .object(let json):
+                    print(json)
+                    return
+                }
+            case let .system(content):
+                let text = try extractText(content)
+                inputItems.append(InputItem.message(.init(role: .system, content: [.inputText(text)])))
+            case let .tool(toolCallExchange):
+                
+                if let toolReqString = toolCallExchange.request.prettyJson {
+                    let mcpTC = toolCallExchange.request
+                    
+                    var args = [String: String]()
+                    mcpTC.arguments.map { (key, value) in
+                        args[key] = "\(value)"
+                    }
+                    
+                    let status = {
+                        if let response = toolCallExchange.response {
+                            guard response.errorMessage == nil else {
+                                return "incomplete"
+                            }
+                            return "completed"
+                        }
+                        else {
+                            return "in_progress"
+                        }
+                    }()
+                    
+                    let toolCall = OpenAIKit.ToolCall.init(id: mcpTC.id, name: mcpTC.toolName, args: args, status: status, callId: mcpTC.callId)
+                    let req = InputItem.toolCall(toolCall)
+                    inputItems.append(req)
+                }
+                
+                if let toolCallResponse = toolCallExchange.response {
+                    let toc = OpenAIKit.ToolOutputContent(callId: toolCallResponse.callId, output: toolCallResponse.output)
+                    let repItem = InputItem.toolOutput(toc)
+                    inputItems.append(repItem)
+                }
+            case .thinking(let reasoning):
+                guard !reasoning.isEmpty else { return }
+                inputItems.append(.reasoning(Reasoning(summary: reasoning.reasoning, id: reasoning.id)))
+            }
+        })
+        
+        return result
+    }
+    
+    public func extractToolCalls() throws -> [OpenAIKit.InputItem] {
+        
+        let toolCallRequests = try self.reduce(into: [OpenAIKit.InputItem]()) { partialResult, message in
+            if case let Message.tool(toolCallExchange) = message {
+                if let toolCallResponse = toolCallExchange.response {
+                    let toc = OpenAIKit.ToolOutputContent(callId: toolCallResponse.callId, output: toolCallResponse.output)
+                    partialResult.append(InputItem.toolOutput(toc))
+                }
+            }
+        }
+        
+        return toolCallRequests
     }
 }
 
@@ -168,17 +221,19 @@ public class OpenAILLM: LLM {
     
     let thinkingLevel: ThinkingLevel?
     
-    let storeResponses: Bool = true
+    var storeResponses: Bool
     
     var requestHandler: DelegatedRequestHandler? = nil
     
     var systemPromptPrefix: String? = nil
     
+    var tools: [Tool]?
+    
 #if USE_NIO
     static let eventLoopGroup: MultiThreadedEventLoopGroup = MultiThreadedEventLoopGroup(numberOfThreads: System.coreCount)
 #endif
     
-    public init(with requestHandler: DelegatedRequestHandler, baseUrl: String = "api.openai.com", apiKey: String, model: ModelID = Model.GPT4.gpt4o, systemPromptPrefix: String? = nil, temperature: Double? = 0.0, topP: Double = 1.0, thinkingLevel: ThinkingLevel? = .medium, maxOutputTokens: Int? = 10000) {
+    public init(with requestHandler: DelegatedRequestHandler, baseUrl: String = "api.openai.com", apiKey: String, model: ModelID = Model.GPT4.gpt4o, systemPromptPrefix: String? = nil, temperature: Double? = 0.0, topP: Double = 1.0, thinkingLevel: ThinkingLevel? = .medium, maxOutputTokens: Int? = 10000, tools: [Tool]? = nil, storeResponses: Bool) {
         self.apiKey = apiKey
         self.model = model
         self.temperature = temperature
@@ -187,9 +242,11 @@ public class OpenAILLM: LLM {
         self.thinkingLevel = thinkingLevel
         self.maxOutputTokens = maxOutputTokens
         self.systemPromptPrefix = systemPromptPrefix
+        self.tools = tools
+        self.storeResponses = storeResponses
     }
 
-    public init(baseUrl: String = "api.openai.com", apiKey: String, model: ModelID = Model.GPT4.gpt4o, systemPromptPrefix: String? = nil, temperature: Double? = 0.0, topP: Double = 1.0, thinkingLevel: ThinkingLevel? = .medium, maxOutputTokens: Int? = 10000) {
+    public init(baseUrl: String = "api.openai.com", apiKey: String, model: ModelID = Model.GPT4.gpt4o, systemPromptPrefix: String? = nil, temperature: Double? = 0.0, topP: Double = 1.0, thinkingLevel: ThinkingLevel? = .medium, maxOutputTokens: Int? = 10000, tools: [Tool]? = nil, storeResponses: Bool) {
         self.apiKey = apiKey
         self.model = model
         self.temperature = temperature
@@ -197,9 +254,48 @@ public class OpenAILLM: LLM {
         self.thinkingLevel = thinkingLevel
         self.maxOutputTokens = maxOutputTokens
         self.systemPromptPrefix = systemPromptPrefix
+        self.tools = tools
+        self.storeResponses = storeResponses
+    }
+    
+    var weHaveAvailableTools: Bool {
+        guard let tools = self.tools, !tools.isEmpty else {
+            return false
+        }
+        return true
+    }
+    
+//    {
+//      "id": "rs_05e790e53b51682600692b334959a08193b03457fc69c2dd96",
+//      "type": "reasoning",
+//      "summary": []
+//    }
+    private func decodeReasoning(oi: OutputItem) throws -> ReasoningItem {
+        guard oi.type == "reasoning" else {
+            throw ContentError.notAValidReasoningItem
+        }
+        
+        return ReasoningItem(id: oi.id, reasoning: oi.summary ?? [])
+    }
+    
+    private func decodeToolCall(oi: OutputItem) throws -> MCPToolCallRequest {
+        guard oi.type == "function_call" else {
+            throw ContentError.notAValidToolCall
+        }
+        
+        // Convert arguments to JSON
+        var arguments: [String: Value] = [:]
+        if let rawArgText = oi.arguments, let rawArgData = rawArgText.data(using: .utf8) {
+            arguments = try JSONDecoder().decode([String: Value].self, from: rawArgData)
+        }
+        
+        #warning("Through or raise an error here as if we have no callId we can't associate the output with the input")
+        return MCPToolCallRequest(id: oi.id, callId: oi.callId ?? "", toolName: oi.name ?? "", arguments: arguments)
     }
     
     public func infer(messages: [Message], stops: [String] = [], responseFormat: SwiftyPrompts.ResponseFormat, apiType: APIType = .standard) async throws -> SwiftyPrompts.LLMOutput? {
+        
+        var apiType = apiType
         
         // Add system prompt prefix
         var messages: [Message] = messages
@@ -235,32 +331,48 @@ public class OpenAILLM: LLM {
       
         let (output, usage): (String, SwiftyPrompts.Usage)
         
-        switch apiType {
-        case .standard:
+        switch (apiType, weHaveAvailableTools) {
+        case (.standard, false):
             
             if storeResponses {
                 logInfo("Store responses is only valid for ADVANCED mode. STANDARD mode will ignore and not store responses")
             }
             
-            let completion = try await openAIClient.chats.create(model: model, messages: messages.openAIFormat(), temperature: temperature, stops: stops, responseFormat: responseFormat.chatRequestFormat())
+            let completion = try await openAIClient.chats.create(model: model, messages: messages.openAIChatFormat(), temperature: temperature, stops: stops, responseFormat: responseFormat.chatRequestFormat())
             let returnedOutput = completion.choices.first!.message
             let intUsage = SwiftyPrompts.Usage(promptTokens: completion.usage.promptTokens, completionTokens: completion.usage.completionTokens ?? 0, totalTokens: completion.usage.totalTokens)
             guard case let Chat.Message.MessageContent.text(text) = returnedOutput.content else {
                 throw ContentError.unexpectedOutput("Expected text but got something else \(returnedOutput.content.self)")
             }
-            (output, usage) = (text, intUsage)
-        case .advanced:
-            // Move this to a process function
-            let responseOutput = try await openAIClient.responses.create(model: model, messages: messages.asOpenAIResponseInput(), temperature: temperature, responseFormat: responseFormat.responseRequestFormat(), store: storeResponses, reasoningEffort: thinkingLevel?.rawValue)
-            let processedOutput = responseOutput.output.compactMap({ $0.contentText }).joined(separator: "\n")
             
+            return SwiftyPrompts.LLMOutput(rawText: text, usage: intUsage)
+            
+        case (.advanced, true), (.advanced, false), (.standard, true): // If we have tools we have to use advanced
+            // Move this to a process function
+            
+            let toolsFromMessages = try messages.extractToolCalls() ?? []
+            let openAIMessages = try messages.openAIResponsesInputFormat()
+            
+            let responseOutput = try await openAIClient.responses.create(model: model, messages: openAIMessages,
+                                                                         temperature: temperature, responseFormat: responseFormat.responseRequestFormat(),
+                                                                         store: storeResponses, tools: tools, reasoningEffort: thinkingLevel?.rawValue)
+            
+            
+            // Pull out relevant outputs
+            let reasoning = responseOutput.output.filter({ $0.type == "reasoning" }).first.map({
+                try? decodeReasoning(oi: $0) ?? nil
+            }) ?? nil
+            
+            
+            let functionCalls = responseOutput.output.filter({ $0.type == "function_call" })
+            let message = responseOutput.output.filter({ $0.type == "message" })
+                                         
+            let processedOutput = responseOutput.output.compactMap({ $0.contentText }).joined(separator: "\n")
             
             let respUsage = responseOutput.usage
             let intUsage = SwiftyPrompts.Usage(promptTokens: respUsage.inputTokens, completionTokens: respUsage.outputTokens ?? 0, totalTokens: respUsage.totalTokens)
             
-            (output, usage) = (processedOutput, intUsage)
+            return try ExchangeOutput<String>(rawText: processedOutput, output: processedOutput, usage: intUsage, toolCalls: functionCalls.compactMap({ try? self.decodeToolCall(oi: $0) }), reasoning: reasoning)
         }
-        
-        return SwiftyPrompts.LLMOutput(rawText: output, usage: usage)
     }
 }
