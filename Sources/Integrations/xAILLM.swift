@@ -10,6 +10,7 @@
 import Foundation
 import SwiftAnthropic
 import SwiftyPrompts
+import SwiftyPrompts_Anthropic
 
 public typealias XModelID = String
 
@@ -21,126 +22,11 @@ public enum XAIModel: XModelID, CaseIterable {
     case grokBeta = "grok-beta"
 }
 
-public enum AnthropicError: Error, CustomStringConvertible {
-    case unknownModel
-    case unsupportedMediaType
-    case apiError(description: String)
-    
-    public var description: String {
-        switch self {
-        case .unknownModel: "Unknown model used with Anthropic"
-        case .unsupportedMediaType: "You tried to use an unsupported media type in a request"
-        case .apiError(let description): "The API returned an error \(description)"
-        }
-    }
-}
+// MARK: Anthropic Chat implementation
+open class xAILLM: AnthropicLLM {
+   public static let xAIAPIBasePath = "https://api.x.ai"
 
-fileprivate extension [Message] {
-    
-    func anthropicFormat() throws -> [SwiftAnthropic.MessageParameter.Message] {
-        
-        func extractText(_ content: Content) throws -> String {
-            switch content {
-            case .text(let text):
-                return text
-            default:
-                throw AnthropicError.unsupportedMediaType
-            }
-        }
-        
-        return try self.map({
-            switch $0 {
-            case let .ai(content):
-                let text = try extractText(content)
-                return MessageParameter.Message.init(role: .assistant, content: .text(text))
-            case let .user(content), let .system(content):
-                let text = try extractText(content)
-                return MessageParameter.Message.init(role: .user, content: .text(text))
-            case .tool(_):
-#warning("Implement tool to message")
-fatalError("Needs to be implemented")
-            case .thinking(_):
-#warning("Implement reasoning to message")
-                fatalError("Reasoning not currently supported on X AI")
-            }
-        })
-    }
-}
-
-
-#warning("This should probably just subclass the Anthropic LLM and override relevant pieces")
-open class xAILLM: LLM {
-
-    public static let xAIAPIBasePath = "https://api.x.ai"
-    
-    let apiKey: String
-    let model: XModelID
-    let temperature: Double
-    let maxTokensToSample = 1024
-    let baseUrl: String
-    let httpClient: HTTPClient?
-
-    public init(httpClient: HTTPClient? = nil, baseUrl: String = xAILLM.xAIAPIBasePath, apiKey: String, model: XModelID, temperature: Double = 1.0) {
-        self.httpClient = httpClient
-        self.apiKey = apiKey
-        self.model = model
-        self.temperature = temperature
-        self.baseUrl = baseUrl ?? Self.xAIAPIBasePath
-    }
-    
-    public func infer(messages: [SwiftyPrompts.Message], stops: [String], responseFormat: SwiftyPrompts.ResponseFormat, apiType: SwiftyPrompts.APIType = .standard) async throws -> SwiftyPrompts.LLMOutput? {
-
-        let xAIClient = {
-            if let httpClient = self.httpClient {
-                return AnthropicServiceFactory.service(apiKey: self.apiKey, betaHeaders: nil, httpClient: httpClient)
-            }
-            else {
-                return AnthropicServiceFactory.service(apiKey: self.apiKey, basePath: baseUrl, betaHeaders: nil)
-            }
-        }()
-        
-        let constructSystemPrompt: () -> MessageParameter.System? = {
-            guard let systemPromptText = messages.compactMap({ if case let .system(.text(text)) = $0 { return text }; return nil }).first else {
-                return nil
-            }
-            return MessageParameter.System.text(systemPromptText)
-        }
-        
-        let otherMessages = messages.filter({
-            switch $0 {
-                case .ai, .user: true
-                default: false
-            }
-        })
-        
-        let anthropicMessages = try otherMessages.anthropicFormat()
-        
-        
-        let parameters = MessageParameter(model: .other(model), messages: anthropicMessages, maxTokens: maxTokensToSample, system: constructSystemPrompt())
-        
-        do {
-            let response = try await xAIClient.createMessage(parameters)
-            
-            let usage = Usage(promptTokens: response.usage.inputTokens ?? 0, completionTokens: response.usage.outputTokens, totalTokens: (response.usage.inputTokens ?? 0) + response.usage.outputTokens)
-            
-            // We only support text based responses at the moment with Anthropic, filter out all others
-            let responseTexts: [String] = response.content.compactMap({
-                if case let MessageResponse.Content.text(text, _) = $0 {
-                    return text
-                }
-                return nil
-            })
-            
-            let responseText = String(responseTexts.joined(separator: "\n"))
-
-            return LLMOutput(rawText: responseText, usage: usage)
-        }
-        catch {
-            guard let anthAPIError = error as? SwiftAnthropic.APIError else {
-                throw error
-            }
-            
-            throw AnthropicError.apiError(description: anthAPIError.displayDescription)
-        }
-    }
+   public init(httpClient: HTTPClient? = nil, baseUrl: String = xAILLM.xAIAPIBasePath, apiKey: String, model: XModelID, temperature: Double = 1.0, tools: [SwiftAnthropic.MessageParameter.Tool]? = nil) {
+       super.init(httpClient: httpClient, baseUrl: baseUrl, apiKey: apiKey, model: .other(model), temperature: temperature, tools: tools)
+   }
 }

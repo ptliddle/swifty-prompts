@@ -118,6 +118,7 @@ let package = Package(
             name: "SwiftyPrompts.xAI",
             dependencies: [
                 "SwiftyPrompts",
+                "SwiftyPrompts.Anthropic",
                 .product(name: "SwiftAnthropic", package: "SwiftAnthropic")
             ],
             path: "Sources/Integrations",
