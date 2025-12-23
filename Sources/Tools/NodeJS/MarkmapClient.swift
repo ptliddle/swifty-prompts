@@ -52,6 +52,7 @@ public struct MarkmapModels {
     }
 }
 
+#if os(macOS) || os(Linux)
 /// A client for interacting with the markmap-lib Node.js library
 public class MarkmapClient {
     /// The underlying NodeJS client
@@ -222,3 +223,4 @@ extension NodeJSClient {
         return result
     }
 }
+#endif

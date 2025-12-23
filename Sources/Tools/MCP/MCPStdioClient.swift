@@ -1,6 +1,7 @@
 import Foundation
 import SwiftyPrompts
 
+#if os(macOS) || os(Linux)
 /// A client for interacting with Model Context Protocol (MCP) servers via standard input/output
 public class MCPStdioClient {
     /// The process used for communication
@@ -111,3 +112,4 @@ public class MCPStdioClient {
         terminate()
     }
 }
+#endif

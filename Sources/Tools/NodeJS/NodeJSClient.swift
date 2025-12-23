@@ -11,6 +11,8 @@ public enum NodeJSError: Error {
     case functionCallFailed(String)
 }
 
+#if os(macOS) || os(Linux)
+
 /// A client for interacting with Node.js modules from Swift
 public class NodeJSClient {
     /// The process used for communication
@@ -199,3 +201,4 @@ public class NodeJSClient {
         terminate()
     }
 }
+#endif

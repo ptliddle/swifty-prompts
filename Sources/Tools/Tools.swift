@@ -29,6 +29,7 @@ public struct Tools {
 //        return FirecrawlClient(apiKey: apiKey, baseURL: baseURL)
 //    }
     
+#if os(macOS) || os(Linux)
     /// Create a new Firecrawl MCP client for LLM integration using HTTP
     /// - Parameters:
     ///   - baseURL: URL of the MCP server
@@ -69,4 +70,5 @@ public struct Tools {
     public func createMarkmapClient(nodeExecutable: URL, moduleDir: URL? = nil, environment: [String: String]? = nil) throws -> MarkmapClient {
         return try MarkmapClient(nodeExecutable: nodeExecutable, moduleDir: moduleDir, environment: environment)
     }
+#endif
 }

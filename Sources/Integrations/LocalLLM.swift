@@ -23,6 +23,22 @@ enum LocalLLMModel {
 
 
 
+/// HubAPI returns a string for the offline error, so we need to use this to identify the current status of the downloaded model
+enum OfflineErrorMsg: String {
+    case noRepo = "Repository not available locally"
+    case noFiles = "No files available locally for this repository"
+    
+    // Below must be checked by prefix as throws like `throw EnvironmentError.fileIntegrityError(String(localized: "Hash mismatch for \(fileUrl.lastPathComponent)"))`
+    case noMetaData = "Metadata not available for"
+    case hashMismatch = "Hash mismatch for"
+}
+
+public enum LocalModelUseabilityState {
+    case useable
+    case partiallyDownloaded
+    case notDownloaded
+}
+
 /// Command line arguments for loading a model.
 public struct ModelLoader {
 
@@ -37,7 +53,7 @@ public struct ModelLoader {
     public init(modelStorageDirectory: URL? = nil, modelRepoId: String) {
         self.modelRepoId = modelRepoId
         self.baseModelsStorageDirectory = modelStorageDirectory
-        self.hubApi = HubApi(downloadBase: modelStorageDirectory, useBackgroundSession: true)
+        self.hubApi = HubApi(downloadBase: modelStorageDirectory, useBackgroundSession: false)
     }
     
     private var downloadStream: AsyncThrowingStream<DownloadStatus, Error>?
@@ -64,11 +80,58 @@ public struct ModelLoader {
         try FileManager.default.removeItem(at: localRepoFolderUrl)
     }
     
+    public func isModelDownloaded(modelRepoId: String) async throws -> LocalModelUseabilityState {
+        // Check local model by trying in offline mode which checks if all model files are present
+        let repo = Hub.Repo(id: modelRepoId)
+        let hub = HubApi(downloadBase: baseModelsStorageDirectory, useBackgroundSession: false, useOfflineMode: true)
+//        guard let _ = try? await hub.snapshot(from: repo, matching: modelFiles) else {
+//            return false
+//        }
+        
+        do {
+            // Get the repo destination and check it exists and is valid, throws error if doesn't exist, no files, no metadata or corrupt files for fully downloaded
+            let repoDestination = try await hub.snapshot(from: repo, matching: modelFiles)
+            
+            // Now we check if the metadata folder contains .incomplete files which indicates partial download
+            let repoMetadataDestination =
+                repoDestination
+                .appendingPathComponent(".cache")
+                .appendingPathComponent("huggingface")
+                .appendingPathComponent("download")
+            
+            if try FileManager.default.contentsOfDirectory(at: repoMetadataDestination, includingPropertiesForKeys: [.isHiddenKey, .isRegularFileKey]).filter({ $0.pathExtension == "incomplete" }).count > 0 {
+                return .partiallyDownloaded
+            }
+        }
+        catch HubApi.EnvironmentError.offlineModeError(let msg) {
+            
+            print(msg)
+            
+            switch msg {
+            case OfflineErrorMsg.noRepo.rawValue:
+                return .notDownloaded
+            case OfflineErrorMsg.noFiles.rawValue:
+                return .notDownloaded
+            case OfflineErrorMsg.hashMismatch.rawValue, OfflineErrorMsg.noMetaData.rawValue:
+                return .partiallyDownloaded
+            default:
+                return .notDownloaded
+            }
+            
+        }
+        
+        return .useable
+    }
+    
+    public func isCurrentModelDownloaded() async throws -> LocalModelUseabilityState {
+        return try await self.isModelDownloaded(modelRepoId: self.modelRepoId)
+    }
+    
     public func download() async throws -> AsyncThrowingStream<Progress, Error>  {
         
         let hub = self.hubApi
         let repo = Hub.Repo(id: modelRepoId)
-
+        
         return AsyncThrowingStream<Progress, Error> { continuation in
             
             Task {
@@ -326,6 +389,11 @@ extension LocalLLM {
         let llmLoader = createLoader(modelStorageDirectory: modelStorageDir, modelRepo: modelRepo)
         return try llmLoader.isModelDownloadedAndValid()
     }
+    
+    public static func modelReadyForUse(modelStorageDir: URL? = nil, modelRepo: String) async throws -> LocalModelUseabilityState {
+        let llmLoader = createLoader(modelStorageDirectory: modelStorageDir, modelRepo: modelRepo)
+        return try await llmLoader.isCurrentModelDownloaded()
+    }
 }
 
 public class LocalLLM: LLM {
@@ -400,11 +468,10 @@ public class LocalLLM: LLM {
     // Turns on or off thinking for the local model
     var enableThinking = false
     
-    
     /// Checks if a model is downloaded and available for use
     public var isModelDownloadedAndValid: Bool {
-        get throws {
-            return try llmLoader.isModelDownloadedAndValid()
+        get async throws {
+            return try await llmLoader.isModelDownloadedAndValid()
         }
     }
 

@@ -1,6 +1,8 @@
 import Foundation
 import SwiftyPrompts
 
+#if os(macOS) || os(Linux)
+
 /// A client for interacting with the Firecrawl MCP server via standard input/output
 public class FirecrawlMCPStdioClient {
     /// The underlying MCP stdio client
@@ -308,3 +310,4 @@ public class FirecrawlMCPStdioClient {
         terminate()
     }
 }
+#endif
