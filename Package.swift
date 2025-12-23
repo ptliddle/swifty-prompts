@@ -45,6 +45,9 @@ let package = Package(
         .package(url: "https://github.com/ptliddle/swifty-json-schema.git", from: "0.3.0"),
         //        .package(path: "../swifty-json-schema"),
         
+        .package(url: "https://github.com/glaciotech/swifty-json-tools.git", from: "0.1.0"),
+        //.package(path: "../SwiftyJSONTools"),
+        
         // 2.1.8 is the lowest version with Linux support
             .package(url: "https://github.com/jamesrochabrun/SwiftAnthropic.git", from: "2.1.8"),
         
@@ -65,9 +68,6 @@ let package = Package(
         
         // Swift logging API
         .package(url: "https://github.com/apple/swift-log.git", from: "1.6.0"),
-        
-        .package(path: "../SwiftyJSONTools"),
-        
     ],
     targets: [
         // Targets are the basic building blocks of a package, defining a module or a test suite.
@@ -85,7 +85,8 @@ let package = Package(
                 //                "SwiftyJsonSchema",
                 .product(name: "SwiftyJsonSchema", package: "swifty-json-schema"),
                 .product(name: "Logging", package: "swift-log"),
-                "SwiftyJSONTools"
+                .product(name: "SwiftyJSONTools", package: "swifty-json-tools")
+//                "SwiftyJSONTools"
             ],
             swiftSettings: [forceUSENIOSwiftSetting]
         ),
@@ -183,7 +184,8 @@ let package = Package(
                            "SwiftyPrompts.Local",
                            "SwiftyPrompts.Tools",
                            .product(name: "OpenAIKit", package: "openai-kit"),
-                           "SwiftyJSONTools"
+                           .product(name: "SwiftyJSONTools", package: "swifty-json-tools")
+//                           "SwiftyJSONTools"
             ],
                             
             resources: [
