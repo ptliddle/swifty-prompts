@@ -16,6 +16,7 @@ public enum AnthropicError: Error, CustomStringConvertible, LocalizedError {
     case unsupportedMediaType
     case apiError(description: String)
     case notAnAnthropicModel(String)
+    case unknownImageType(String)
     
     public var errorDescription: String? {
         return description
@@ -27,6 +28,7 @@ public enum AnthropicError: Error, CustomStringConvertible, LocalizedError {
         case .unsupportedMediaType: "You tried to use an unsupported media type in a request"
         case .apiError(let description): "The API returned an error: \(description)"
         case .notAnAnthropicModel(let model): "The model \(model) is not an anthropic model"
+        case .unknownImageType(let type): "Unknown image type \(type) not supported by anthropic"
         }
     }
 }
@@ -58,6 +60,23 @@ fileprivate extension [String: Value] {
     }
 }
 
+package extension SwiftAnthropic.MessageParameter.Message.Content.ImageSource.MediaType {
+    init(ext extensionString: String) throws {
+        switch extensionString {
+        case "png":
+            self = .png
+        case "jpeg", "jpg":
+            self = .jpeg
+        case "gif":
+            self = .gif
+        case "webp":
+            self = .webp
+        default:
+            throw AnthropicError.unknownImageType(extensionString)
+        }
+    }
+}
+
 package extension [Message] {
     
     func anthropicFormat() throws -> [SwiftAnthropic.MessageParameter.Message] {
@@ -77,8 +96,20 @@ package extension [Message] {
                 let text = try extractText(content)
                 partialResult.append(MessageParameter.Message.init(role: .assistant, content: .text(text)))
             case let .user(content), let .system(content):
-                let text = try extractText(content)
-                partialResult.append(MessageParameter.Message.init(role: .user, content: .text(text)))
+                switch content {
+                case .text:
+                    let text = try extractText(content)
+                    partialResult.append(MessageParameter.Message.init(role: .user, content: .text(text)))
+                case let .image(data, typeExt):
+                    partialResult.append(MessageParameter.Message.init(role: .user, content: .list([.image(.init(type: .base64, mediaType: try .init(ext: typeExt), data: data.base64EncodedString()))])))
+                case let .imageUrl(_):
+                    fatalError("Url type image not supported on Anthropic")
+                case .fileId(_):
+                    fatalError("fileId not supported on Anthropic")
+                case .object(let _):
+                    fatalError("Objects not directly supported on Anthropic")
+                }
+
             case .tool(let toolResult):
                 
                 let request = toolResult.request
