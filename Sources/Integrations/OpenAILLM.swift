@@ -27,9 +27,8 @@ public enum ContentError: Error {
     case notAValidToolCall
     case corruptedToolOuput
     case notAValidReasoningItem
+    case noOutputMessage
 }
-
-
 
 extension InputMessage.Role {
     init(from message: Message) {
@@ -65,7 +64,7 @@ private extension [Message] {
             switch $0 {
             case let .ai(content):
                 let text = try extractText(content)
-                return Chat.Message.assistant(content: text)
+                return Chat.Message.assistant(content: .text(text))
             case let .user(content):
                 switch content {
                 case .text(let text):
@@ -106,9 +105,9 @@ private extension [Message] {
                 case .text(let text):
                     inputItems.append( InputItem.message(.init(role: .user, content: [.inputText(text)])))
                 case let .image(data, type):
-                    fatalError("Image as data not currently supported, copy logic from ChatMessage.MessageContent.image")
+                    inputItems.append(InputItem.message(.init(role: .user, content: [.inputImage(data: data, imageType: type)])))
                 case let .imageUrl(url):
-                    inputItems.append( InputItem.message(InputMessage(role: .user, content: [.inputImage(url: url)])))
+                    inputItems.append( InputItem.message(InputMessage(role: .user, content: [.inputImageUrl(url: url)])))
                 case let .fileId(fileId):
                     inputItems.append( InputItem.message(InputMessage(role: .user, content: [.inputFile(fileId)])))
                 case .object(let json):
@@ -175,6 +174,7 @@ private extension [Message] {
 }
 
 private extension SwiftyPrompts.ResponseFormat {
+    
     func chatRequestFormat() -> OpenAIKit.CreateChatRequest.ResponseFormat? {
         switch self {
         case .jsonObject:
@@ -198,7 +198,7 @@ private extension SwiftyPrompts.ResponseFormat {
     }
 }
 
-public class OpenAILLM: LLM {
+open class OpenAILLM: LLM {
     
     let logger = Logger(label: "\(OpenAILLM.self)")
     
@@ -293,7 +293,7 @@ public class OpenAILLM: LLM {
         return MCPToolCallRequest(id: oi.id, callId: oi.callId ?? "", toolName: oi.name ?? "", arguments: arguments)
     }
     
-    public func infer(messages: [Message], stops: [String] = [], responseFormat: SwiftyPrompts.ResponseFormat, apiType: APIType = .standard) async throws -> SwiftyPrompts.LLMOutput? {
+    open func infer(messages: [Message], stops: [String] = [], responseFormat: SwiftyPrompts.ResponseFormat, apiType: APIType = .standard) async throws -> SwiftyPrompts.LLMOutput? {
         
         var apiType = apiType
         
@@ -332,20 +332,41 @@ public class OpenAILLM: LLM {
         let (output, usage): (String, SwiftyPrompts.Usage)
         
         switch (apiType, weHaveAvailableTools) {
-        case (.standard, false):
+        case (.standard, false), (.standard, true):
             
             if storeResponses {
                 logInfo("Store responses is only valid for ADVANCED mode. STANDARD mode will ignore and not store responses")
             }
             
-            let completion = try await openAIClient.chats.create(model: model, messages: messages.openAIChatFormat(), temperature: temperature, stops: stops, responseFormat: responseFormat.chatRequestFormat())
-            let returnedOutput = completion.choices.first!.message
+            let completion = try await openAIClient.chats.create(model: model, messages: messages.openAIChatFormat(),
+                                                                 temperature: temperature, stops: stops,
+                                                                 responseFormat: responseFormat.chatRequestFormat(), tools: tools)
+            
+            guard let returnedOutput = completion.choices.first?.message, case let Chat.Message.assistant(content) = returnedOutput else {
+                throw ContentError.noOutputMessage
+            }
+            
+            
             let intUsage = SwiftyPrompts.Usage(promptTokens: completion.usage.promptTokens, completionTokens: completion.usage.completionTokens ?? 0, totalTokens: completion.usage.totalTokens)
             guard case let Chat.Message.MessageContent.text(text) = returnedOutput.content else {
                 throw ContentError.unexpectedOutput("Expected text but got something else \(returnedOutput.content.self)")
             }
             
-            return SwiftyPrompts.LLMOutput(rawText: text, usage: intUsage)
+            switch content {
+            case let .text(text):
+                return SwiftyPrompts.LLMOutput(rawText: text, usage: intUsage)
+            case let .toolCalls(toolCalls, text, toolId):
+                return try ExchangeOutput<String>(rawText: text ?? "", output: text ?? "", usage: intUsage, toolCalls: toolCalls.map({
+                    // Convert arguments to JSON
+                    var arguments: [String: Value] = [:]
+                    let rawArgText = $0.function.arguments
+                    if let rawArgData = rawArgText.data(using: .utf8) {
+                        arguments = try JSONDecoder().decode([String: Value].self, from: rawArgData)
+                    }
+                    
+                    return MCPToolCallRequest(id: toolId ?? UUID().uuidString, callId: toolId ?? UUID().uuidString, toolName: $0.function.name, arguments: arguments)
+                }))
+            }
             
         case (.advanced, true), (.advanced, false), (.standard, true): // If we have tools we have to use advanced
             // Move this to a process function

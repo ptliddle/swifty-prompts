@@ -53,6 +53,18 @@ public protocol ProvidesEmptyStatus {
     var isEmpty: Bool { get }
 }
 
+public enum LLMError: Error, LocalizedError {
+    case invalidEndpointUrl(String)
+    case noHostInUrl
+    
+    public var errorDescription: String? {
+        switch self {
+        case .invalidEndpointUrl(let url): return "The url \(url) is invalid and couldn't be parsed"
+        case .noHostInUrl: return "No host was able to be parsed from the url"
+        }
+    }
+}
+
 extension String: ProvidesEmptyStatus {}
 
 public extension [MCPToolCallRequest]? {
