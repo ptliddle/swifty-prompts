@@ -82,8 +82,13 @@ private extension [Message] {
             case let .system(content):
                 let text = try extractText(content)
                 return Chat.Message.system(content: text)
-            case .tool(_):
-                fatalError("Tool cannot be encoded for a chat message, you need to use the advanced repsonses API")
+            case let .tool(toolCallExchange):
+                guard let toolResponse = toolCallExchange.response else {
+                    return nil
+                }
+
+                let content = toolResponse.errorMessage ?? toolResponse.output.compactJson() ?? toolResponse.output.prettyJson ?? ""
+                return Chat.Message.tool(content: content, toolCallId: toolResponse.callId)
             case .thinking(let reasoning):
                 return nil // This isn't returned as a message
             }

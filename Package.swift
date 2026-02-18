@@ -32,6 +32,8 @@ let package = Package(
                  targets: ["SwiftyPrompts.Anthropic"]),
         .library(name: "SwiftyPrompts.xAI",
                  targets: ["SwiftyPrompts.xAI"]),
+        .library(name: "SwiftyPrompts.Inception",
+                 targets: ["SwiftyPrompts.Inception"]),
         .library(name: "SwiftyPrompts.Local",
                  targets: ["SwiftyPrompts.Local"]),
         .library(name: "SwiftyPrompts.Tools",
@@ -40,13 +42,13 @@ let package = Package(
                  targets: ["SwiftyPrompts.VaporSupport"])
     ], dependencies: [
         // 💧 A server-side Swift web framework.
-        .package(url: "https://github.com/ptliddle/openai-kit.git", from: "0.2.0"),
+        .package(url: "https://github.com/ptliddle/openai-kit.git", branch: "develop"),
 //        .package(path: "../../Libraries/openai-kit"),
-        .package(url: "https://github.com/ptliddle/swifty-json-schema.git", from: "0.3.0"),
-        //        .package(path: "../swifty-json-schema"),
+//        .package(url: "https://github.com/ptliddle/swifty-json-schema.git", from: "0.3.0"),
+                .package(path: "../swifty-json-schema"),
         
         .package(url: "https://github.com/glaciotech/swifty-json-tools.git", from: "0.1.0"),
-        //.package(path: "../SwiftyJSONTools"),
+//        .package(path: "../SwiftyJSONTools"),
         
         // 2.1.8 is the lowest version with Linux support
             .package(url: "https://github.com/jamesrochabrun/SwiftAnthropic.git", from: "2.1.8"),
@@ -129,6 +131,19 @@ let package = Package(
             swiftSettings: [forceUSENIOSwiftSetting]
         ),
         .target(
+            name: "SwiftyPrompts.Inception",
+            dependencies: [
+                "SwiftyPrompts",
+                "SwiftyPrompts.OpenAI",
+                .product(name: "OpenAIKit", package: "openai-kit"),
+            ],
+            path: "Sources/Integrations",
+            sources: [
+                "InceptionLLM.swift"
+            ],
+            swiftSettings: [forceUSENIOSwiftSetting]
+        ),
+        .target(
             name: "SwiftyPrompts.Local",
             dependencies: [
                 "SwiftyPrompts",
@@ -181,6 +196,7 @@ let package = Package(
                            "SwiftyPrompts.OpenAI",
                            "SwiftyPrompts.Anthropic",
                            "SwiftyPrompts.xAI",
+                           "SwiftyPrompts.Inception",
                            "SwiftyPrompts.Local",
                            "SwiftyPrompts.Tools",
                            .product(name: "OpenAIKit", package: "openai-kit"),
