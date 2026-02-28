@@ -16,6 +16,7 @@ public typealias InceptionModelID = String
 
 public enum InceptionModel: InceptionModelID, CaseIterable {
     case mercury
+    case mercury2 = "mercury-2"
 }
 
 open class InceptionLLM: OpenAILLM {
