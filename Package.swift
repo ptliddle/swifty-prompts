@@ -42,16 +42,17 @@ let package = Package(
                  targets: ["SwiftyPrompts.VaporSupport"])
     ], dependencies: [
         // 💧 A server-side Swift web framework.
-        .package(url: "https://github.com/ptliddle/openai-kit.git", branch: "develop"),
+       .package(url: "https://github.com/ptliddle/openai-kit.git", from: "0.4.0"),
 //        .package(path: "../../Libraries/openai-kit"),
-//        .package(url: "https://github.com/ptliddle/swifty-json-schema.git", from: "0.3.0"),
-                .package(path: "../swifty-json-schema"),
+
+       .package(url: "https://github.com/ptliddle/swifty-json-schema.git", from: "0.4.0"),
+//        .package(path: "../swifty-json-schema"),
         
-        .package(url: "https://github.com/glaciotech/swifty-json-tools.git", from: "0.1.0"),
+       .package(url: "https://github.com/glaciotech/swifty-json-tools.git", from: "0.1.0"),
 //        .package(path: "../SwiftyJSONTools"),
         
         // 2.1.8 is the lowest version with Linux support
-            .package(url: "https://github.com/jamesrochabrun/SwiftAnthropic.git", from: "2.1.8"),
+       .package(url: "https://github.com/jamesrochabrun/SwiftAnthropic.git", from: "2.1.8"),
         
         // MARK: - Local LLM dependencies
         // For local, does not work on linux as swift-transformers requires accelerate
@@ -61,7 +62,7 @@ let package = Package(
         //        .package(url: "https://github.com/huggingface/swift-transformers", exact: "0.1.22"),
         //        .package(url: "https://github.com/1024jp/GzipSwift", "6.0.1" ... "6.1.0"),
         
-            .package(url: "https://github.com/apple/swift-async-algorithms", from: "1.0.0"),
+        .package(url: "https://github.com/apple/swift-async-algorithms", from: "1.0.0"),
         .package(url: "https://github.com/ml-explore/mlx-swift-examples.git", from: "2.25.0"),
         
         

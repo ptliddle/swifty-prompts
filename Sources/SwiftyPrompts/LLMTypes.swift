@@ -70,6 +70,17 @@ public enum Message {
         case .thinking(_): return "reasoning"
         }
     }
+    
+    public var isError: Bool {
+        switch self {
+        case .ai(let content), .system(let content), .user(let content):
+            return false
+        case .tool(let tco):
+            return (tco.response?.errorMessage != nil) ?? false
+        case .thinking(let reasoningItem):
+            return false
+        }
+    }
 }
 
 public struct Usage {

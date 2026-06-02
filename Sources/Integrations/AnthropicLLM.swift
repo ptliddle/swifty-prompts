@@ -121,7 +121,7 @@ package extension [Message] {
                 
                 if let response = toolResult.response {
                     let isError = response.errorMessage != nil
-                    let anthropicResponse = MessageParameter.Message.Content.ContentObject.toolResult(response.callId, response.output.compactJson() ?? "", isError, .none)
+                    let anthropicResponse = MessageParameter.Message.Content.ContentObject.toolResult(response.callId, response.output.compactJson() ?? "", isError: isError, cacheControl: .none)
                     partialResult.append(.init(role: .user, content: .list([anthropicResponse])))
                 }
                 
