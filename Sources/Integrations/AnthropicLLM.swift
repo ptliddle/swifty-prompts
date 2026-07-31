@@ -81,9 +81,37 @@ package extension [Message] {
     
     typealias ContentObject = MessageParameter.Message.Content.ContentObject
     
-    struct ToolUsePair {
-        var call: [ContentObject] = []
-        var result: [ContentObject] = []
+    struct ToolCollection {
+        var calls: [ContentObject] = []
+        var results: [ContentObject] = []
+    }
+
+    /// Collects the consecutive tool exchanges beginning at `index`.
+    ///
+    /// A non-tool message is a turn boundary. In particular, tool calls after
+    /// a user or assistant message belong to a separate Anthropic turn and
+    /// must not be folded into this collection.
+    private func greedyToolCollection(from index: inout Int) throws -> ToolCollection {
+        var collection = ToolCollection()
+
+        while index < self.count {
+            guard case let .tool(toolResult) = self[index] else {
+                break
+            }
+
+            let request = toolResult.request
+            let content = try request.arguments.asAnthropicInput
+            collection.calls.append(.toolUse(request.id, request.toolName, content))
+
+            if let response = toolResult.response {
+                let isError = response.errorMessage != nil
+                collection.results.append(.toolResult(response.callId, response.output.compactJson() ?? "", isError: isError, cacheControl: .none))
+            }
+
+            index += 1
+        }
+
+        return collection
     }
     
     func anthropicFormat() throws -> [SwiftAnthropic.MessageParameter.Message] {
@@ -109,7 +137,7 @@ package extension [Message] {
                 partialResult.append(MessageParameter.Message.init(role: .assistant, content: .text(text)))
                 index += 1
                 
-            case let .user(content), let .system(content):
+            case let .user(content):
                 switch content {
                 case .text:
                     let text = try extractText(content)
@@ -125,40 +153,19 @@ package extension [Message] {
                 }
                 index += 1
 
+            case .system:
+                // Anthropic system messages are handled by constructSystemPrompt.
+                index += 1
+
             case .tool:
-                // A single assistant turn can make multiple (parallel) tool calls, which show up here
-                // as multiple consecutive `.tool` messages. Anthropic requires ALL `tool_use` blocks from
-                // a turn to be combined into ONE assistant message, and ALL corresponding `tool_result`
-                // blocks to be combined into the ONE following user message - otherwise it rejects the
-                // request with "tool_result block must have a corresponding tool_use block in the
-                // previous message". So we gather the whole run of consecutive `.tool` messages here
-                // before emitting the grouped assistant/user messages.
-                var toolUseObjects: [ContentObject] = []
-                var toolResultObjects: [ContentObject] = []
+                let toolCollection = try greedyToolCollection(from: &index)
                 
-                while index < self.count, case let .tool(toolResult) = self[index] {
-                    let request = toolResult.request
-                    
-                    // Note: intentionally not using `try?` here - if this fails we must not silently
-                    // drop the tool_use while still emitting its tool_result below, since that produces
-                    // an orphaned tool_result with no matching tool_use (the exact bug this fixes).
-                    let content = try request.arguments.asAnthropicInput
-                    toolUseObjects.append(.toolUse(request.id, request.toolName, content))
-                    
-                    if let response = toolResult.response {
-                        let isError = response.errorMessage != nil
-                        toolResultObjects.append(.toolResult(response.callId, response.output.compactJson() ?? "", isError: isError, cacheControl: .none))
-                    }
-                    
-                    index += 1
+                if !toolCollection.calls.isEmpty {
+                    partialResult.append(.init(role: .assistant, content: .list(toolCollection.calls)))
                 }
                 
-                if !toolUseObjects.isEmpty {
-                    partialResult.append(.init(role: .assistant, content: .list(toolUseObjects)))
-                }
-                
-                if !toolResultObjects.isEmpty {
-                    partialResult.append(.init(role: .user, content: .list(toolResultObjects)))
+                if !toolCollection.results.isEmpty {
+                    partialResult.append(.init(role: .user, content: .list(toolCollection.results)))
                 }
                 
             case .thinking(let reasoning):
@@ -346,7 +353,14 @@ open class AnthropicLLM: LLM {
 
         
         let constructSystemPrompt: () -> MessageParameter.System? = {
-            guard let systemPromptText = messages.compactMap({ if case let .system(.text(text)) = $0 { return text }; return nil }).first else {
+            let systemPromptText = messages.compactMap {
+                if case let .system(.text(text)) = $0 {
+                    return text
+                }
+                return nil
+            }.joined(separator: "\n\n")
+
+            guard !systemPromptText.isEmpty else {
                 return nil
             }
             return MessageParameter.System.text(systemPromptText)

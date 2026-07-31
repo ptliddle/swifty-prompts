@@ -80,6 +80,37 @@ final class AnthropicLLMTests: XCTestCase {
         XCTAssertEqual(outputContent, "\"This is the scraped content from the website\"")
         XCTAssertEqual(cache, .none)
     }
+
+    func testToolCollectionStopsAtUserBoundary() throws {
+        let firstTool = SwiftyPrompts.Message.tool(try .init(
+            callId: "first-tool-call-id",
+            request: .init(id: "first-tool-call-id", callId: "first-tool-call-id", toolName: "firstTool", arguments: [:]),
+            response: .init(id: "first-tool-call-id", callId: "first-tool-call-id", toolName: "firstTool", output: .string("first result"))))
+        let secondTool = SwiftyPrompts.Message.tool(try .init(
+            callId: "second-tool-call-id",
+            request: .init(id: "second-tool-call-id", callId: "second-tool-call-id", toolName: "secondTool", arguments: [:]),
+            response: .init(id: "second-tool-call-id", callId: "second-tool-call-id", toolName: "secondTool", output: .string("second result"))))
+
+        let anthropicMessages = try [firstTool, .user(.text("Continue")), secondTool].anthropicFormat()
+
+        XCTAssertEqual(anthropicMessages.count, 5)
+        XCTAssertEqual(anthropicMessages[0].role, MessageParameter.Message.Role.assistant.rawValue)
+        XCTAssertEqual(anthropicMessages[1].role, MessageParameter.Message.Role.user.rawValue)
+        XCTAssertEqual(anthropicMessages[2].role, MessageParameter.Message.Role.user.rawValue)
+        XCTAssertEqual(anthropicMessages[3].role, MessageParameter.Message.Role.assistant.rawValue)
+        XCTAssertEqual(anthropicMessages[4].role, MessageParameter.Message.Role.user.rawValue)
+
+        guard case let .list(firstToolContent) = anthropicMessages[0].content,
+              case let .toolUse(firstToolID, _, _) = firstToolContent[0],
+              case let .list(secondToolContent) = anthropicMessages[3].content,
+              case let .toolUse(secondToolID, _, _) = secondToolContent[0] else {
+            XCTFail("Did not find separate tool calls")
+            return
+        }
+
+        XCTAssertEqual(firstToolID, "first-tool-call-id")
+        XCTAssertEqual(secondToolID, "second-tool-call-id")
+    }
     
     func testConvertReasoningToAnthropicFormat() throws {
         let testMessages = [
