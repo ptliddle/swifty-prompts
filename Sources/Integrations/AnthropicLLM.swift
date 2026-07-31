@@ -79,6 +79,13 @@ package extension SwiftAnthropic.MessageParameter.Message.Content.ImageSource.Me
 
 package extension [Message] {
     
+    typealias ContentObject = MessageParameter.Message.Content.ContentObject
+    
+    struct ToolUsePair {
+        var call: [ContentObject] = []
+        var result: [ContentObject] = []
+    }
+    
     func anthropicFormat() throws -> [SwiftAnthropic.MessageParameter.Message] {
         
         func extractText(_ content: Content) throws -> String {
@@ -89,12 +96,19 @@ package extension [Message] {
                 throw AnthropicError.unsupportedMediaType
             }
         }
-    
-        return try self.reduce(into: [SwiftAnthropic.MessageParameter.Message]()) { partialResult, message in
+        
+        var partialResult: [SwiftAnthropic.MessageParameter.Message] = []
+        var index = 0
+        
+        while index < self.count {
+            let message = self[index]
+            
             switch message {
             case let .ai(content):
                 let text = try extractText(content)
                 partialResult.append(MessageParameter.Message.init(role: .assistant, content: .text(text)))
+                index += 1
+                
             case let .user(content), let .system(content):
                 switch content {
                 case .text:
@@ -109,29 +123,144 @@ package extension [Message] {
                 case .object(let _):
                     fatalError("Objects not directly supported on Anthropic")
                 }
+                index += 1
 
-            case .tool(let toolResult):
+            case .tool:
+                // A single assistant turn can make multiple (parallel) tool calls, which show up here
+                // as multiple consecutive `.tool` messages. Anthropic requires ALL `tool_use` blocks from
+                // a turn to be combined into ONE assistant message, and ALL corresponding `tool_result`
+                // blocks to be combined into the ONE following user message - otherwise it rejects the
+                // request with "tool_result block must have a corresponding tool_use block in the
+                // previous message". So we gather the whole run of consecutive `.tool` messages here
+                // before emitting the grouped assistant/user messages.
+                var toolUseObjects: [ContentObject] = []
+                var toolResultObjects: [ContentObject] = []
                 
-                let request = toolResult.request
-                
-                if let content = try? request.arguments.asAnthropicInput {
-                    let anthropicRequest = MessageParameter.Message.Content.ContentObject.toolUse(request.id, request.toolName, content)
-                    partialResult.append(.init(role: .assistant, content: .list([anthropicRequest])))
+                while index < self.count, case let .tool(toolResult) = self[index] {
+                    let request = toolResult.request
+                    
+                    // Note: intentionally not using `try?` here - if this fails we must not silently
+                    // drop the tool_use while still emitting its tool_result below, since that produces
+                    // an orphaned tool_result with no matching tool_use (the exact bug this fixes).
+                    let content = try request.arguments.asAnthropicInput
+                    toolUseObjects.append(.toolUse(request.id, request.toolName, content))
+                    
+                    if let response = toolResult.response {
+                        let isError = response.errorMessage != nil
+                        toolResultObjects.append(.toolResult(response.callId, response.output.compactJson() ?? "", isError: isError, cacheControl: .none))
+                    }
+                    
+                    index += 1
                 }
                 
-                if let response = toolResult.response {
-                    let isError = response.errorMessage != nil
-                    let anthropicResponse = MessageParameter.Message.Content.ContentObject.toolResult(response.callId, response.output.compactJson() ?? "", isError: isError, cacheControl: .none)
-                    partialResult.append(.init(role: .user, content: .list([anthropicResponse])))
+                if !toolUseObjects.isEmpty {
+                    partialResult.append(.init(role: .assistant, content: .list(toolUseObjects)))
+                }
+                
+                if !toolResultObjects.isEmpty {
+                    partialResult.append(.init(role: .user, content: .list(toolResultObjects)))
                 }
                 
             case .thinking(let reasoning):
                 let thinkingMsg = MessageParameter.Message.init(role: .assistant, content: .list(reasoning.reasoning.map({ .thinking($0, "") })))
                 partialResult.append(thinkingMsg)
+                index += 1
             }
         }
+        
+        return partialResult
     }
 }
+
+//package extension [Message] {
+//    
+//    func anthropicFormat() throws -> [SwiftAnthropic.MessageParameter.Message] {
+//        
+//        func extractText(_ content: Content) throws -> String {
+//            switch content {
+//            case .text(let text):
+//                return text
+//            default:
+//                throw AnthropicError.unsupportedMediaType
+//            }
+//        }
+//        
+//        typealias ContentObject = MessageParameter.Message.Content.ContentObject
+//        
+//        var partialResult: [SwiftAnthropic.MessageParameter.Message] = []
+//        var index = 0
+//        
+//        while index < self.count {
+//            let message = self[index]
+//            
+//            switch message {
+//            case let .ai(content):
+//                let text = try extractText(content)
+//                partialResult.append(MessageParameter.Message.init(role: .assistant, content: .text(text)))
+//                index += 1
+//                
+//            case let .user(content), let .system(content):
+//                switch content {
+//                case .text:
+//                    let text = try extractText(content)
+//                    partialResult.append(MessageParameter.Message.init(role: .user, content: .text(text)))
+//                case let .image(data, typeExt):
+//                    partialResult.append(MessageParameter.Message.init(role: .user, content: .list([.image(.init(type: .base64, mediaType: try .init(ext: typeExt), data: data.base64EncodedString()))])))
+//                case let .imageUrl(_):
+//                    fatalError("Url type image not supported on Anthropic")
+//                case .fileId(_):
+//                    fatalError("fileId not supported on Anthropic")
+//                case .object(let _):
+//                    fatalError("Objects not directly supported on Anthropic")
+//                }
+//                index += 1
+//
+//            case .tool:
+//                // A single assistant turn can make multiple (parallel) tool calls, which show up here
+//                // as multiple consecutive `.tool` messages. Anthropic requires ALL `tool_use` blocks from
+//                // a turn to be combined into ONE assistant message, and ALL corresponding `tool_result`
+//                // blocks to be combined into the ONE following user message - otherwise it rejects the
+//                // request with "tool_result block must have a corresponding tool_use block in the
+//                // previous message". So we gather the whole run of consecutive `.tool` messages here
+//                // before emitting the grouped assistant/user messages.
+//                var toolUseObjects: [ContentObject] = []
+//                var toolResultObjects: [ContentObject] = []
+//                
+//                while index < self.count, case let .tool(toolResult) = self[index] {
+//                    let request = toolResult.request
+//                    
+//                    // Note: intentionally not using `try?` here - if this fails we must not silently
+//                    // drop the tool_use while still emitting its tool_result below, since that produces
+//                    // an orphaned tool_result with no matching tool_use (the exact bug this fixes).
+//                    let content = try request.arguments.asAnthropicInput
+//                    toolUseObjects.append(.toolUse(request.id, request.toolName, content))
+//                    
+//                    if let response = toolResult.response {
+//                        let isError = response.errorMessage != nil
+//                        toolResultObjects.append(.toolResult(response.callId, response.output.compactJson() ?? "", isError: isError, cacheControl: .none))
+//                    }
+//                    
+//                    index += 1
+//                }
+//                
+//                if !toolUseObjects.isEmpty {
+//                    partialResult.append(.init(role: .assistant, content: .list(toolUseObjects)))
+//                }
+//                
+//                if !toolResultObjects.isEmpty {
+//                    partialResult.append(.init(role: .user, content: .list(toolResultObjects)))
+//                }
+//                
+//            case .thinking(let reasoning):
+//                let thinkingMsg = MessageParameter.Message.init(role: .assistant, content: .list(reasoning.reasoning.map({ .thinking($0, "") })))
+//                partialResult.append(thinkingMsg)
+//                index += 1
+//            }
+//        }
+//        
+//        return partialResult
+//    }
+//}
 
 extension [String: SwiftyJsonSchema.Value] {
     init(fromAnthropicValue content: SwiftAnthropic.MessageResponse.Content.Input) throws {
