@@ -101,7 +101,7 @@ package extension [Message] {
 
             let request = toolResult.request
             let content = try request.arguments.asAnthropicInput
-            collection.calls.append(.toolUse(request.id, request.toolName, content))
+            collection.calls.append(.toolUse(request.callId, request.toolName, content))
 
             if let response = toolResult.response {
                 let isError = response.errorMessage != nil
