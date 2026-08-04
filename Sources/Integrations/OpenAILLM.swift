@@ -59,40 +59,72 @@ private extension [Message] {
     }
     
     public func openAIChatFormat() throws -> [Chat.Message] {
-        
-        return try self.compactMap({
-            switch $0 {
+
+        var result: [Chat.Message] = []
+        var index = 0
+
+        while index < self.count {
+            let message = self[index]
+
+            switch message {
             case let .ai(content):
                 let text = try extractText(content)
-                return Chat.Message.assistant(content: .text(text))
+                result.append(.assistant(content: .text(text)))
+                index += 1
+
             case let .user(content):
                 switch content {
                 case .text(let text):
-                    return Chat.Message.user(content: .text(text))
+                    result.append(.user(content: .text(text)))
                 case let .image(data, type):
-                    return Chat.Message.user(content: .content([.image(data, type)]))
+                    result.append(.user(content: .content([.image(data, type)])))
                 case let .imageUrl(url):
-                    return Chat.Message.user(content: .content([.imageUrl(url)]))
+                    result.append(.user(content: .content([.imageUrl(url)])))
                 case let .fileId(fileId):
-                    return Chat.Message.user(content: .content([.text(fileId)]))
-                case .object(let json):
-                    print(json)
-                    return nil
+                    result.append(.user(content: .content([.text(fileId)])))
+                case .object:
+                    break
                 }
+                index += 1
+
             case let .system(content):
                 let text = try extractText(content)
-                return Chat.Message.system(content: text)
-            case let .tool(toolCallExchange):
-                guard let toolResponse = toolCallExchange.response else {
-                    return nil
+                result.append(.system(content: text))
+                index += 1
+
+            case .tool:
+                var toolCalls: [Chat.ToolCall] = []
+                var toolResults: [Chat.Message] = []
+
+                while index < self.count, case let .tool(exchange) = self[index] {
+                    let req = exchange.request
+                    let argsData = try JSONEncoder().encode(req.arguments)
+                    let argsString = String(data: argsData, encoding: .utf8) ?? "{}"
+
+                    toolCalls.append(Chat.ToolCall(
+                        id: req.id,
+                        function: .init(name: req.toolName, arguments: argsString)
+                    ))
+
+                    if let response = exchange.response {
+                        let content = response.errorMessage ?? response.output.compactJson() ?? response.output.prettyJson ?? ""
+                        toolResults.append(.tool(content: content, toolCallId: response.callId))
+                    }
+
+                    index += 1
                 }
 
-                let content = toolResponse.errorMessage ?? toolResponse.output.compactJson() ?? toolResponse.output.prettyJson ?? ""
-                return Chat.Message.tool(content: content, toolCallId: toolResponse.callId)
-            case .thinking(let reasoning):
-                return nil // This isn't returned as a message
+                if !toolCalls.isEmpty {
+                    result.append(.assistant(content: .toolCalls(toolCalls, nil, nil)))
+                }
+                result.append(contentsOf: toolResults)
+
+            case .thinking:
+                index += 1
             }
-        })
+        }
+
+        return result
     }
     
     public func openAIResponsesInputFormat() throws -> [OpenAIKit.InputItem] {
@@ -155,8 +187,14 @@ private extension [Message] {
                     inputItems.append(repItem)
                 }
             case .thinking(let reasoning):
-                guard !reasoning.isEmpty else { return }
-                inputItems.append(.reasoning(Reasoning(summary: reasoning.reasoning, id: reasoning.id)))
+                switch reasoning {
+                case .simple(_, _, let reasoningTexts):
+                    guard !reasoningTexts.isEmpty else { return }
+                    inputItems.append(.reasoning(Reasoning(summary: reasoningTexts, id: reasoning.id)))
+                case .signed(_, _, let entries):
+                    guard !entries.isEmpty else { return }
+                    inputItems.append(.reasoning(Reasoning(summary: entries.map(\.text), id: reasoning.id)))
+                }
             }
         })
         
@@ -280,7 +318,7 @@ open class OpenAILLM: LLM {
             throw ContentError.notAValidReasoningItem
         }
         
-        return ReasoningItem(id: oi.id, reasoning: oi.summary ?? [])
+        return .simple(id: oi.id, responseId: nil, reasoning: oi.summary ?? [])
     }
     
     private func decodeToolCall(oi: OutputItem) throws -> MCPToolCallRequest {
@@ -388,6 +426,16 @@ open class OpenAILLM: LLM {
             let reasoning = responseOutput.output.filter({ $0.type == "reasoning" }).first.map({
                 try? decodeReasoning(oi: $0) ?? nil
             }) ?? nil
+
+            // Attach the response ID to link reasoning to its associated response
+            let reasoningWithResponseId: ReasoningItem? = reasoning.map { item in
+                switch item {
+                case .simple(let id, _, let reasoningTexts):
+                    return .simple(id: id, responseId: responseOutput.id, reasoning: reasoningTexts)
+                case .signed(let id, _, let entries):
+                    return .signed(id: id, responseId: responseOutput.id, entries: entries)
+                }
+            }
             
             
             let functionCalls = responseOutput.output.filter({ $0.type == "function_call" })
@@ -398,7 +446,7 @@ open class OpenAILLM: LLM {
             let respUsage = responseOutput.usage
             let intUsage = SwiftyPrompts.Usage(promptTokens: respUsage.inputTokens, completionTokens: respUsage.outputTokens ?? 0, totalTokens: respUsage.totalTokens)
             
-            return try ExchangeOutput<String>(rawText: processedOutput, output: processedOutput, usage: intUsage, toolCalls: functionCalls.compactMap({ try? self.decodeToolCall(oi: $0) }), reasoning: reasoning)
+            return try ExchangeOutput<String>(rawText: processedOutput, output: processedOutput, usage: intUsage, toolCalls: functionCalls.compactMap({ try? self.decodeToolCall(oi: $0) }), reasoning: reasoningWithResponseId, responseId: responseOutput.id)
         }
     }
 }

@@ -10,6 +10,7 @@ import SwiftAnthropic
 import SwiftyPrompts
 import SwiftyJsonSchema
 import SwiftyJSONTools
+import Logging
 
 public enum AnthropicError: Error, CustomStringConvertible, LocalizedError {
     case unknownModel
@@ -169,8 +170,14 @@ package extension [Message] {
                 }
                 
             case .thinking(let reasoning):
-                let thinkingMsg = MessageParameter.Message.init(role: .assistant, content: .list(reasoning.reasoning.map({ .thinking($0, "") })))
-                partialResult.append(thinkingMsg)
+                switch reasoning {
+                case .signed(_, _, let entries):
+                    let contentObjects = entries.map { ContentObject.thinking($0.text, $0.signature ?? "") }
+                    partialResult.append(MessageParameter.Message(role: .assistant, content: .list(contentObjects)))
+                case .simple(_, _, let reasoningTexts):
+                    AnthropicLLM.logger.warning("Dropping \(reasoningTexts.count) unsigned reasoning entries — Anthropic requires valid signatures for thinking blocks")
+                    break
+                }
                 index += 1
             }
         }
@@ -178,96 +185,6 @@ package extension [Message] {
         return partialResult
     }
 }
-
-//package extension [Message] {
-//    
-//    func anthropicFormat() throws -> [SwiftAnthropic.MessageParameter.Message] {
-//        
-//        func extractText(_ content: Content) throws -> String {
-//            switch content {
-//            case .text(let text):
-//                return text
-//            default:
-//                throw AnthropicError.unsupportedMediaType
-//            }
-//        }
-//        
-//        typealias ContentObject = MessageParameter.Message.Content.ContentObject
-//        
-//        var partialResult: [SwiftAnthropic.MessageParameter.Message] = []
-//        var index = 0
-//        
-//        while index < self.count {
-//            let message = self[index]
-//            
-//            switch message {
-//            case let .ai(content):
-//                let text = try extractText(content)
-//                partialResult.append(MessageParameter.Message.init(role: .assistant, content: .text(text)))
-//                index += 1
-//                
-//            case let .user(content), let .system(content):
-//                switch content {
-//                case .text:
-//                    let text = try extractText(content)
-//                    partialResult.append(MessageParameter.Message.init(role: .user, content: .text(text)))
-//                case let .image(data, typeExt):
-//                    partialResult.append(MessageParameter.Message.init(role: .user, content: .list([.image(.init(type: .base64, mediaType: try .init(ext: typeExt), data: data.base64EncodedString()))])))
-//                case let .imageUrl(_):
-//                    fatalError("Url type image not supported on Anthropic")
-//                case .fileId(_):
-//                    fatalError("fileId not supported on Anthropic")
-//                case .object(let _):
-//                    fatalError("Objects not directly supported on Anthropic")
-//                }
-//                index += 1
-//
-//            case .tool:
-//                // A single assistant turn can make multiple (parallel) tool calls, which show up here
-//                // as multiple consecutive `.tool` messages. Anthropic requires ALL `tool_use` blocks from
-//                // a turn to be combined into ONE assistant message, and ALL corresponding `tool_result`
-//                // blocks to be combined into the ONE following user message - otherwise it rejects the
-//                // request with "tool_result block must have a corresponding tool_use block in the
-//                // previous message". So we gather the whole run of consecutive `.tool` messages here
-//                // before emitting the grouped assistant/user messages.
-//                var toolUseObjects: [ContentObject] = []
-//                var toolResultObjects: [ContentObject] = []
-//                
-//                while index < self.count, case let .tool(toolResult) = self[index] {
-//                    let request = toolResult.request
-//                    
-//                    // Note: intentionally not using `try?` here - if this fails we must not silently
-//                    // drop the tool_use while still emitting its tool_result below, since that produces
-//                    // an orphaned tool_result with no matching tool_use (the exact bug this fixes).
-//                    let content = try request.arguments.asAnthropicInput
-//                    toolUseObjects.append(.toolUse(request.id, request.toolName, content))
-//                    
-//                    if let response = toolResult.response {
-//                        let isError = response.errorMessage != nil
-//                        toolResultObjects.append(.toolResult(response.callId, response.output.compactJson() ?? "", isError: isError, cacheControl: .none))
-//                    }
-//                    
-//                    index += 1
-//                }
-//                
-//                if !toolUseObjects.isEmpty {
-//                    partialResult.append(.init(role: .assistant, content: .list(toolUseObjects)))
-//                }
-//                
-//                if !toolResultObjects.isEmpty {
-//                    partialResult.append(.init(role: .user, content: .list(toolResultObjects)))
-//                }
-//                
-//            case .thinking(let reasoning):
-//                let thinkingMsg = MessageParameter.Message.init(role: .assistant, content: .list(reasoning.reasoning.map({ .thinking($0, "") })))
-//                partialResult.append(thinkingMsg)
-//                index += 1
-//            }
-//        }
-//        
-//        return partialResult
-//    }
-//}
 
 extension [String: SwiftyJsonSchema.Value] {
     init(fromAnthropicValue content: SwiftAnthropic.MessageResponse.Content.Input) throws {
@@ -281,6 +198,8 @@ extension [String: SwiftyJsonSchema.Value] {
 }
 
 open class AnthropicLLM: LLM {
+
+    static let logger = Logger(label: "\(AnthropicLLM.self)")
 
     let apiKey: String
     let model: SwiftAnthropic.Model
@@ -382,8 +301,10 @@ open class AnthropicLLM: LLM {
             
             let processedOutput = (segmentedResponses.text + segmentedResponses.toolResponse.compactMap({ $0.output.prettyJson })).joined(separator: "\n")
             
-            return try ExchangeOutput<String>(rawText: responseText, output: processedOutput, usage: usage, toolCalls: segmentedResponses.toolRequests,
-                                              reasoning: .init(reasoning: response.getThinkingContent().map({ $0.thinking })))
+            let thinkingContent = response.getThinkingContent().map { ReasoningItem.ReasoningEntry(text: $0.thinking, signature: $0.signature) }
+            let reasoningItem: ReasoningItem? = thinkingContent.isEmpty ? nil : .signed(id: nil, responseId: response.id, entries: thinkingContent)
+
+            return try ExchangeOutput<String>(rawText: responseText, output: processedOutput, usage: usage, toolCalls: segmentedResponses.toolRequests, reasoning: reasoningItem, responseId: response.id)
         }
         catch {
             guard let anthAPIError = error as? SwiftAnthropic.APIError else {

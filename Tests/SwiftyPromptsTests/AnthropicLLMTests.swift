@@ -242,7 +242,10 @@ final class AnthropicLLMTests: XCTestCase {
     
     func testConvertReasoningToAnthropicFormat() throws {
         let testMessages = [
-            SwiftyPrompts.Message.thinking(.init(reasoning: ["Hmm i need to do a lot of thinking", "I need to think a little more"]))
+            SwiftyPrompts.Message.thinking(.signed(id: nil, responseId: nil, entries: [
+                .init(text: "Hmm i need to do a lot of thinking", signature: "sig1"),
+                .init(text: "I need to think a little more", signature: "sig2")
+            ]))
         ]
         
         let anthropicMessages = try testMessages.anthropicFormat()
@@ -260,8 +263,8 @@ final class AnthropicLLMTests: XCTestCase {
         XCTAssertEqual(anthropicFirst.role, MessageParameter.Message.Role.assistant.rawValue)
         XCTAssertEqual(thinkingContent1, "Hmm i need to do a lot of thinking")
         XCTAssertEqual(thinkingContent2, "I need to think a little more")
-        XCTAssertEqual(signature1, "")
-        XCTAssertEqual(signature2, "")
+        XCTAssertEqual(signature1, "sig1")
+        XCTAssertEqual(signature2, "sig2")
     }
 
     func testConvertAnthropicResponseWithToolResponseToSwiftyPromptsFormat() throws {

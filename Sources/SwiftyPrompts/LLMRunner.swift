@@ -85,6 +85,7 @@ public struct ExchangeOutput<OutputType> where OutputType: ProvidesEmptyStatus {
     public var usage: Usage                 // The number of tokens used in the exchange
     public var toolCalls: [MCPToolCallRequest]?    // Any tool call requests from the LLM
     public var reasoning: ReasoningItem?           // Any reasoning the LLM did
+    public var responseId: String?                // The ID of the response from the LLM
     public var runTime: TimeInterval?       // The time it took to run the exchange
   
     
@@ -95,14 +96,16 @@ public struct ExchangeOutput<OutputType> where OutputType: ProvidesEmptyStatus {
     ///   - usage: The number of tokens used for various stages from the LLM request
     ///   - toolCalls: An array of requests for MCP tools that the LLM wants to us make calls to
     ///   - reasoning: Any reasoning that the LLM did
+    ///   - responseId: The ID of the response from the LLM
     ///   - runTime: The amount of time it took the LLM to process the request
     ///
-    public init(rawText: String, output: OutputType, usage: Usage, toolCalls: [MCPToolCallRequest]? = nil, reasoning: ReasoningItem? = nil, runTime: TimeInterval? = nil) {
+    public init(rawText: String, output: OutputType, usage: Usage, toolCalls: [MCPToolCallRequest]? = nil, reasoning: ReasoningItem? = nil, responseId: String? = nil, runTime: TimeInterval? = nil) {
         self.rawText = rawText
         self.output = output
         self.usage = usage
         self.toolCalls = toolCalls
         self.reasoning = reasoning
+        self.responseId = responseId
         self.runTime = runTime
     }
 }
@@ -112,12 +115,13 @@ public typealias LLMOutput = ExchangeOutput<String>
 
 extension LLMOutput {
     
-    public init(rawText: String, usage: Usage, toolCalls: [MCPToolCallRequest]? = nil, reasoning: ReasoningItem? = nil, runTime: TimeInterval? = nil) {
+    public init(rawText: String, usage: Usage, toolCalls: [MCPToolCallRequest]? = nil, reasoning: ReasoningItem? = nil, responseId: String? = nil, runTime: TimeInterval? = nil) {
         self.rawText = rawText
         self.output = rawText
         self.usage = usage
         self.toolCalls = toolCalls
         self.reasoning = reasoning
+        self.responseId = responseId
         self.runTime = runTime
     }
     
@@ -173,6 +177,7 @@ public struct JSONSchemaPromptRunner<OutputType: ProducesJSONSchema>: PromptRunn
     }
 }
 
+@available(*, deprecated, renamed: "BasicToolCapablePromptRunner", message: "Prefer using BasicToolCapablePromptRunner instead and just set tools to nil or [] on LLM, functionally the same")
 public struct BasicPromptRunner: PromptRunner {
     
     public typealias OutputType = String
@@ -194,15 +199,18 @@ public struct BasicPromptRunner: PromptRunner {
         let llmResult = try await llm.infer(messages: messages, stops: [], responseFormat: .text, apiType: apiType)
         let timeToRunSeconds = Date.now.timeIntervalSince1970 - start.timeIntervalSince1970
         
-        let output = llmResult?.rawText as? OutputType ?? ""
-        let usage = llmResult?.usage ?? .none
+        guard var llmResult else {
+            return .init(rawText: "", usage: .none, runTime: timeToRunSeconds)
+        }
         
-        return .init(rawText: output, output: output, usage: usage, toolCalls: nil, reasoning: llmResult?.reasoning, runTime: timeToRunSeconds)
+        // Update result with the run time
+        llmResult.runTime = timeToRunSeconds
+        
+        return llmResult
     }
     
 }
 
-#warning("Probably remove this and just have optional tools param on base runner")
 public struct BasicToolCapablePromptRunner: PromptRunner {
     
     public typealias OutputType = String
@@ -224,9 +232,13 @@ public struct BasicToolCapablePromptRunner: PromptRunner {
         let llmResult = try await llm.infer(messages: messages, stops: [], responseFormat: .text, apiType: .advanced)
         let timeToRunSeconds = Date.now.timeIntervalSince1970 - start.timeIntervalSince1970
         
-        let output = llmResult?.rawText as? OutputType ?? ""
-        let usage = llmResult?.usage ?? .none
+        guard var llmResult else {
+            return .init(rawText: "", usage: .none, runTime: timeToRunSeconds)
+        }
         
-        return .init(rawText: output, output: output, usage: usage, toolCalls: llmResult?.toolCalls, reasoning: llmResult?.reasoning, runTime: timeToRunSeconds)
+        // Update result with the run time
+        llmResult.runTime = timeToRunSeconds
+        
+        return llmResult
     }
 }

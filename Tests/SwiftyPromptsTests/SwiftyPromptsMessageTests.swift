@@ -69,7 +69,7 @@ final class SwiftyPromptsMessageTests: XCTestCase {
     
     func testOpenAIResponsesFormat_convertsReasoningMessageToOpenAIInputItem() throws {
         
-        let reasoningMessage = SwiftyPrompts.Message.thinking(ReasoningItem(id: "mock-id", reasoning: ["Thinking line 1", "Thinking line 2"]))
+        let reasoningMessage = SwiftyPrompts.Message.thinking(.simple(id: "mock-id", responseId: nil, reasoning: ["Thinking line 1", "Thinking line 2"]))
         let openAIInput = try [reasoningMessage].openAIResponsesInputFormat()
         print(openAIInput)
         

@@ -9,21 +9,6 @@ import SwiftyJsonSchema
 import SwiftyJSONTools
 
 
-/// A model to represent and hold LLM thinking responses
-public struct ReasoningItem: Codable, ProvidesEmptyStatus {
-    public var id: String?      // Not used by all LLMs
-    public var reasoning: [String]
-    
-    public init(id: String? = nil, reasoning: [String]) {
-        self.id = id
-        self.reasoning = reasoning
-    }
-    
-    public var isEmpty: Bool {
-        return reasoning.isEmpty
-    }
-}
-
 /// A service agnostic representation of a request to call an MCP Tool
 public struct MCPToolCallRequest: Codable, CustomStringConvertible {
     

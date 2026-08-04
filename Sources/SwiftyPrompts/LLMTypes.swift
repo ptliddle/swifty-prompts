@@ -31,6 +31,64 @@ public extension Content {
     }
 }
 
+// MARK: - ReasoningItem
+
+public enum ReasoningItem: Codable, ProvidesEmptyStatus {
+
+    /// Used by providers that return reasoning as simple text strings (e.g., OpenAI)
+    case simple(id: String?, responseId: String?, reasoning: [String])
+
+    /// Used by providers that return signed thinking blocks (e.g., Anthropic)
+    case signed(id: String?, responseId: String?, entries: [ReasoningEntry])
+
+    /// A single thinking block with optional cryptographic signature
+    public struct ReasoningEntry: Codable {
+        public var text: String
+        public var signature: String?
+
+        public init(text: String, signature: String? = nil) {
+            self.text = text
+            self.signature = signature
+        }
+    }
+}
+
+public extension ReasoningItem {
+
+    /// Flattens both cases to an array of reasoning text strings
+    var reasoningTexts: [String] {
+        switch self {
+        case .simple(_, _, let reasoning): reasoning
+        case .signed(_, _, let entries): entries.map(\.text)
+        }
+    }
+
+    /// The reasoning item's own ID (e.g., OpenAI's `rs_abc`). Not a message link ID.
+    var id: String? {
+        switch self {
+        case .simple(let id, _, _): id
+        case .signed(let id, _, _): id
+        }
+    }
+
+    /// The ID of the response this reasoning is associated with
+    var responseId: String? {
+        switch self {
+        case .simple(_, let responseId, _): responseId
+        case .signed(_, let responseId, _): responseId
+        }
+    }
+
+    var isEmpty: Bool {
+        switch self {
+        case .simple(_, _, let reasoning): reasoning.isEmpty
+        case .signed(_, _, let entries): entries.isEmpty
+        }
+    }
+}
+
+// MARK: - Message
+
 public enum Message {
     
     case system(Content)
@@ -46,7 +104,7 @@ public enum Message {
         case .tool(let tco):
             return .text("\(tco)")
         case .thinking(let reasoningItem):
-            return .text(reasoningItem.reasoning.joined(separator: "\n"))
+            return .text(reasoningItem.reasoningTexts.joined(separator: "\n"))
         }
     }
     
@@ -57,7 +115,7 @@ public enum Message {
         case .tool(let tco):
             return "\(tco)"
         case .thinking(let reasoningItem):
-            return reasoningItem.reasoning.joined(separator: "\n")
+            return reasoningItem.reasoningTexts.joined(separator: "\n")
         }
     }
     
