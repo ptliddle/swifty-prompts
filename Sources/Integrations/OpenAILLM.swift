@@ -332,8 +332,7 @@ open class OpenAILLM: LLM {
             arguments = try JSONDecoder().decode([String: Value].self, from: rawArgData)
         }
         
-        #warning("Through or raise an error here as if we have no callId we can't associate the output with the input")
-        return MCPToolCallRequest(id: oi.id, callId: oi.callId ?? "", toolName: oi.name ?? "", arguments: arguments)
+        return MCPToolCallRequest(id: oi.id, callId: oi.callId ?? oi.id, toolName: oi.name ?? "", arguments: arguments)
     }
     
     open func infer(messages: [Message], stops: [String] = [], responseFormat: SwiftyPrompts.ResponseFormat, apiType: APIType = .standard) async throws -> SwiftyPrompts.LLMOutput? {

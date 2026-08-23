@@ -204,18 +204,21 @@ open class AnthropicLLM: LLM {
     let apiKey: String
     let model: SwiftAnthropic.Model
     let temperature: Double
-    let maxTokensToSample = 1024
+    let maxTokensToSample: Int
+    let thinking: SwiftAnthropic.MessageParameter.Thinking?
     let baseUrl: String?
     
     let httpClient: HTTPClient?
     
     let tools: [SwiftAnthropic.MessageParameter.Tool]?
 
-    public init(httpClient: HTTPClient? = nil, baseUrl: String? = nil, apiKey: String, model: SwiftAnthropic.Model, temperature: Double = 1.0, tools: [SwiftAnthropic.MessageParameter.Tool]? = nil) {
+    public init(httpClient: HTTPClient? = nil, baseUrl: String? = nil, apiKey: String, model: SwiftAnthropic.Model, temperature: Double = 1.0, maxTokens: Int = 16000, thinking: SwiftAnthropic.MessageParameter.Thinking? = nil, tools: [SwiftAnthropic.MessageParameter.Tool]? = nil) {
         self.httpClient = httpClient
         self.apiKey = apiKey
         self.model = model
         self.temperature = temperature
+        self.maxTokensToSample = maxTokens
+        self.thinking = thinking
         self.baseUrl = baseUrl
         self.tools = tools
     }
@@ -287,7 +290,7 @@ open class AnthropicLLM: LLM {
         
         let anthropicMessages = try messages.anthropicFormat()
         
-        let parameters = MessageParameter(model: model, messages: anthropicMessages, maxTokens: maxTokensToSample, system: constructSystemPrompt(), tools: tools)
+        let parameters = MessageParameter(model: model, messages: anthropicMessages, maxTokens: maxTokensToSample, system: constructSystemPrompt(), tools: tools, thinking: thinking)
         
         do {
             let response = try await anthropicClient.createMessage(parameters)

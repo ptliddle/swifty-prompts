@@ -15,6 +15,7 @@ import MLXLLM
 import Hub
 import Foundation
 import SwiftyPrompts
+import SwiftyJsonSchema
 
 
 enum LocalLLMModel {
@@ -330,8 +331,10 @@ enum LocalLLMError: Error {
 
 fileprivate extension [SwiftyPrompts.Message] {
     
-    /// Need output to be in format [["role": "user", "content": prompt]] for MLX local llms
-    func localFormat() throws -> [[String: String]] {
+    /// Need output to be in format [["role": "user", "content": prompt]] for MLX local llms.
+    /// Tool call exchanges are formatted with tool_calls on assistant messages and tool results with the tool role,
+    /// matching the format that Qwen and other chat templates expect.
+    func localFormat() throws -> [[String: Any]] {
         
         func extractText(_ content: Content) throws -> String {
             switch content {
@@ -342,20 +345,61 @@ fileprivate extension [SwiftyPrompts.Message] {
             }
         }
         
-        return try self.map({
-            switch $0 {
+        var result: [[String: Any]] = []
+        var index = 0
+        
+        while index < self.count {
+            switch self[index] {
             case let .ai(content):
                 let text = try extractText(content)
-                return ["role": "assistant", "content": text]
-            case let .user(content), let .system(content):
+                result.append(["role": "assistant", "content": text])
+                index += 1
+                
+            case let .system(content):
                 let text = try extractText(content)
-                return ["role": "user", "content": text]
-            case .tool(_):
-                fatalError("Tools not currently supported on local models")
-            case .thinking(_):
-                fatalError("Reasoning not currently supported on local models")
+                result.append(["role": "system", "content": text])
+                index += 1
+                
+            case let .user(content):
+                let text = try extractText(content)
+                result.append(["role": "user", "content": text])
+                index += 1
+                
+            case .tool:
+                // Collect consecutive tool exchanges and format them as assistant tool_calls + tool results
+                var toolCalls: [[String: Any]] = []
+                while index < self.count, case let .tool(tco) = self[index] {
+                    let req = tco.request
+                    let argsData = try JSONEncoder().encode(req.arguments)
+                    let argsString = String(data: argsData, encoding: .utf8) ?? "{}"
+                    
+                    toolCalls.append([
+                        "type": "function",
+                        "function": [
+                            "name": req.toolName,
+                            "arguments": argsString
+                        ]
+                    ])
+                    
+                    if let response = tco.response {
+                        let content = response.errorMessage ?? response.output.compactJson() ?? response.output.prettyJson ?? ""
+                        result.append(["role": "tool", "content": content])
+                    }
+                    
+                    index += 1
+                }
+                
+                if !toolCalls.isEmpty {
+                    result.append(["role": "assistant", "content": "", "tool_calls": toolCalls])
+                }
+                
+            case let .thinking(reasoningItem):
+                result.append(["role": "assistant", "content": reasoningItem.reasoningTexts.joined(separator: "\n")])
+                index += 1
             }
-        })
+        }
+        
+        return result
     }
 }
 
@@ -425,11 +469,12 @@ public class LocalLLM: LLM {
     
     let modelRepoId: String
     
-    public init(modelStorageDir: URL? = nil, modelRepoId: String, evalMemory: Bool = false) {
+    public init(modelStorageDir: URL? = nil, modelRepoId: String, evalMemory: Bool = false, tools: [ToolSpec]? = nil) {
         self.modelStorageDir = modelStorageDir
         self.llmLoader = Self.createLoader(modelStorageDirectory: modelStorageDir, modelRepo: modelRepoId) //ModelLoader(modelStorageDirectory: modelStorageDir, repoBasePath: repoBasePath, modelRepoId: modelRepoId)
         self.memoryEval = evalMemory ? MemoryUsageEvaluator() : nil
         self.modelRepoId = modelRepoId
+        self.tools = tools
     }
     
     public var repoBasePath: String? {
@@ -445,7 +490,7 @@ public class LocalLLM: LLM {
     }
     
     // Maximum number of tokens to generate
-    var maxTokens = 10000
+    var maxTokens = 4096
     
     // The sampling temperature
     var temperature: Float = 0.6
@@ -467,6 +512,9 @@ public class LocalLLM: LLM {
     
     // Turns on or off thinking for the local model
     var enableThinking = false
+
+    // Tools available to the model. When set, these are passed to the chat template and tool calls are parsed from the output.
+    public var tools: [ToolSpec]?
     
     /// Checks if a model is downloaded and available for use
     public var isModelDownloadedAndValid: Bool {
@@ -505,13 +553,18 @@ public class LocalLLM: LLM {
         }()
         
         let userMessages = try messages.localFormat()
-        var messages: [[String: String]] = [["role": "system", "content": "You are a helpful assistant, answer in the language the user addresses you in"]]
-        messages.append(contentsOf: userMessages)
+        var allMessages: [[String: Any]] = [["role": "system", "content": "You are a helpful assistant, answer in the language the user addresses you in"]]
+        allMessages.append(contentsOf: userMessages)
         
 #warning("Refactor to use the new features like UserInput in mlx-libraries")
         let promptTokens = try await modelContainer.perform { _, tokenizer in
-            try tokenizer.applyChatTemplate(messages: messages, tools: nil, additionalContext: ["enable_thinking": enableThinking])
+            try tokenizer.applyChatTemplate(messages: allMessages, tools: tools, additionalContext: ["enable_thinking": enableThinking])
         }
+        
+        let maxContextTokens = 32768
+        let truncatedPromptTokens = promptTokens.count > maxContextTokens
+            ? Array(promptTokens.suffix(maxContextTokens))
+            : promptTokens
         
         let (tokenizer, model) = await (modelContext.tokenizer, modelContext.model)
         
@@ -521,7 +574,7 @@ public class LocalLLM: LLM {
                                                     repetitionContextSize: repetitionContextSize)
         
         var detokenizer = NaiveStreamingDetokenizer(tokenizer: tokenizer)
-        let result = try generate(promptTokens: promptTokens, parameters: generateParameters, model: model, tokenizer: tokenizer, extraEOSTokens: nil) { tokens in
+        let result = try generate(promptTokens: truncatedPromptTokens, parameters: generateParameters, model: model, tokenizer: tokenizer, extraEOSTokens: nil) { tokens in
             
             if let last = tokens.last {
                 detokenizer.append(token: last)
@@ -556,7 +609,51 @@ public class LocalLLM: LLM {
         
         print(summary())
         
-        return LLMOutput(rawText: result.output, usage: Usage(promptTokens: inputTokens, completionTokens: outputTokens, totalTokens: outputTokens + inputTokens))
+        MLX.GPU.clearCache()
+        
+        let toolCalls = Self.parseToolCalls(from: result.output)
+        let outputText = toolCalls != nil ? "" : result.output
+        return LLMOutput(rawText: result.output, output: outputText, usage: Usage(promptTokens: inputTokens, completionTokens: outputTokens, totalTokens: outputTokens + inputTokens), toolCalls: toolCalls)
+    }
+    
+    /// Parses tool calls from the model output text. Qwen and other chat-templated models typically output tool calls in a format like:
+    /// ```
+    /// {"name": "tool_name", "arguments": {...}}
+    /// ```
+    /// The function name and arguments are extracted and converted to MCPToolCallRequest.
+    static func parseToolCalls(from text: String) -> [MCPToolCallRequest]? {
+        let pattern = #"(?s)<tool_call>\s*(\{.*?\})\s*</tool_call>"#
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else { return nil }
+        
+        let nsText = text as NSString
+        let matches = regex.matches(in: text, options: [], range: NSRange(location: 0, length: nsText.length))
+        
+        guard !matches.isEmpty else { return nil }
+        
+        var toolCalls: [MCPToolCallRequest] = []
+        
+        for match in matches {
+            let jsonRange = match.range(at: 1)
+            let jsonString = nsText.substring(with: jsonRange)
+            
+            guard let jsonData = jsonString.data(using: .utf8),
+                  let json = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any] else { continue }
+            
+            let name = json["name"] as? String ?? ""
+            let arguments = json["arguments"] as? [String: Any] ?? [:]
+            
+            let callId = UUID().uuidString
+            let mcpArguments: [String: Value]
+            if let argData = try? JSONSerialization.data(withJSONObject: arguments) {
+                mcpArguments = (try? JSONDecoder().decode([String: Value].self, from: argData)) ?? [:]
+            } else {
+                mcpArguments = [:]
+            }
+            
+            toolCalls.append(MCPToolCallRequest(id: callId, callId: callId, toolName: name, arguments: mcpArguments))
+        }
+        
+        return toolCalls.isEmpty ? nil : toolCalls
     }
     
     func load() async throws -> LoadedModelCache {
