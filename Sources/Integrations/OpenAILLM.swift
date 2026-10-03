@@ -259,6 +259,7 @@ open class OpenAILLM: LLM {
     let model: ModelID
     let temperature: Double?
     let baseUrl: String
+    let scheme: API.Scheme
     
     let maxOutputTokens: Int?
     
@@ -276,11 +277,12 @@ open class OpenAILLM: LLM {
     static let eventLoopGroup: MultiThreadedEventLoopGroup = MultiThreadedEventLoopGroup(numberOfThreads: System.coreCount)
 #endif
     
-    public init(with requestHandler: DelegatedRequestHandler, baseUrl: String = "api.openai.com", apiKey: String, model: ModelID = Model.GPT4.gpt4o, systemPromptPrefix: String? = nil, temperature: Double? = 0.0, topP: Double = 1.0, thinkingLevel: ThinkingLevel? = .medium, maxOutputTokens: Int? = 10000, tools: [Tool]? = nil, storeResponses: Bool) {
+    public init(with requestHandler: DelegatedRequestHandler, baseUrl: String = "api.openai.com", apiKey: String, model: ModelID = Model.GPT4.gpt4o, systemPromptPrefix: String? = nil, temperature: Double? = 0.0, topP: Double = 1.0, thinkingLevel: ThinkingLevel? = .medium, maxOutputTokens: Int? = 10000, tools: [Tool]? = nil, storeResponses: Bool, scheme: API.Scheme = .https) {
         self.apiKey = apiKey
         self.model = model
         self.temperature = temperature
         self.baseUrl = baseUrl
+        self.scheme = scheme
         self.requestHandler = requestHandler
         self.thinkingLevel = thinkingLevel
         self.maxOutputTokens = maxOutputTokens
@@ -289,11 +291,12 @@ open class OpenAILLM: LLM {
         self.storeResponses = storeResponses
     }
 
-    public init(baseUrl: String = "api.openai.com", apiKey: String, model: ModelID = Model.GPT4.gpt4o, systemPromptPrefix: String? = nil, temperature: Double? = 0.0, topP: Double = 1.0, thinkingLevel: ThinkingLevel? = .medium, maxOutputTokens: Int? = 10000, tools: [Tool]? = nil, storeResponses: Bool) {
+    public init(baseUrl: String = "api.openai.com", apiKey: String, model: ModelID = Model.GPT4.gpt4o, systemPromptPrefix: String? = nil, temperature: Double? = 0.0, topP: Double = 1.0, thinkingLevel: ThinkingLevel? = .medium, maxOutputTokens: Int? = 10000, tools: [Tool]? = nil, storeResponses: Bool, scheme: API.Scheme = .https) {
         self.apiKey = apiKey
         self.model = model
         self.temperature = temperature
         self.baseUrl = baseUrl
+        self.scheme = scheme
         self.thinkingLevel = thinkingLevel
         self.maxOutputTokens = maxOutputTokens
         self.systemPromptPrefix = systemPromptPrefix
@@ -345,7 +348,7 @@ open class OpenAILLM: LLM {
             messages = [.system(.text(systemPromptPrefix))] + messages
         }
         
-        let configuration = Configuration(apiKey: apiKey, api: API(scheme: .https, host: baseUrl))
+        let configuration = Configuration(apiKey: apiKey, api: API(scheme: scheme, host: baseUrl))
         
         let openAIClient: OpenAIKit.Client
         
