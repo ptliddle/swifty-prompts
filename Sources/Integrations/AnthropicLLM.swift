@@ -174,7 +174,7 @@ package extension [Message] {
                 case .signed(_, _, let entries):
                     let contentObjects = entries.map { ContentObject.thinking($0.text, $0.signature ?? "") }
                     partialResult.append(MessageParameter.Message(role: .assistant, content: .list(contentObjects)))
-                case .simple(_, _, let reasoningTexts):
+                case .simple(_, _, let reasoningTexts, _):
                     AnthropicLLM.logger.warning("Dropping \(reasoningTexts.count) unsigned reasoning entries — Anthropic requires valid signatures for thinking blocks")
                     break
                 }

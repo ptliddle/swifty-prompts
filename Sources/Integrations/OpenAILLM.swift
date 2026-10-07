@@ -188,12 +188,15 @@ private extension [Message] {
                 }
             case .thinking(let reasoning):
                 switch reasoning {
-                case .simple(_, _, let reasoningTexts):
-                    guard !reasoningTexts.isEmpty else { return }
-                    inputItems.append(.reasoning(Reasoning(summary: reasoningTexts, id: reasoning.id)))
+                case .simple(_, _, let reasoningTexts, let encryptedContent):
+                    // Per spec, a replayed reasoning item must have either a non-empty summary or an encrypted_content
+                    guard !reasoningTexts.isEmpty || encryptedContent != nil else { return }
+                    inputItems.append(.reasoning(Reasoning(id: reasoning.id,
+                                                          summary: reasoningTexts.map(SummaryText.init(text:)),
+                                                          encryptedContent: encryptedContent)))
                 case .signed(_, _, let entries):
                     guard !entries.isEmpty else { return }
-                    inputItems.append(.reasoning(Reasoning(summary: entries.map(\.text), id: reasoning.id)))
+                    inputItems.append(.reasoning(Reasoning(id: reasoning.id, summary: entries.map { SummaryText(text: $0.text) })))
                 }
             }
         })
@@ -321,7 +324,7 @@ open class OpenAILLM: LLM {
             throw ContentError.notAValidReasoningItem
         }
         
-        return .simple(id: oi.id, responseId: nil, reasoning: oi.summary?.asSimple ?? [])
+        return .simple(id: oi.id, responseId: nil, reasoning: oi.summary?.map(\.text) ?? [], encryptedContent: oi.encryptedContent)
     }
     
     private func decodeToolCall(oi: OutputItem) throws -> MCPToolCallRequest {
@@ -432,8 +435,8 @@ open class OpenAILLM: LLM {
             // Attach the response ID to link reasoning to its associated response
             let reasoningWithResponseId: ReasoningItem? = reasoning.map { item in
                 switch item {
-                case .simple(let id, _, let reasoningTexts):
-                    return .simple(id: id, responseId: responseOutput.id, reasoning: reasoningTexts)
+                case .simple(let id, _, let reasoningTexts, let encryptedContent):
+                    return .simple(id: id, responseId: responseOutput.id, reasoning: reasoningTexts, encryptedContent: encryptedContent)
                 case .signed(let id, _, let entries):
                     return .signed(id: id, responseId: responseOutput.id, entries: entries)
                 }

@@ -69,7 +69,7 @@ final class SwiftyPromptsMessageTests: XCTestCase {
     
     func testOpenAIResponsesFormat_convertsReasoningMessageToOpenAIInputItem() throws {
         
-        let reasoningMessage = SwiftyPrompts.Message.thinking(.simple(id: "mock-id", responseId: nil, reasoning: ["Thinking line 1", "Thinking line 2"]))
+        let reasoningMessage = SwiftyPrompts.Message.thinking(.simple(id: "mock-id", responseId: nil, reasoning: ["Thinking line 1", "Thinking line 2"], encryptedContent: "mock-encrypted-content"))
         let openAIInput = try [reasoningMessage].openAIResponsesInputFormat()
         print(openAIInput)
         
@@ -79,8 +79,45 @@ final class SwiftyPromptsMessageTests: XCTestCase {
         }
         
         XCTAssertEqual(reasoningItem.id, "mock-id")
-        XCTAssertEqual(reasoningItem.summary![0], "Thinking line 1")
-        XCTAssertEqual(reasoningItem.summary![1], "Thinking line 2")
+        XCTAssertEqual(reasoningItem.summary?.map(\.text), ["Thinking line 1", "Thinking line 2"])
+        XCTAssertEqual(reasoningItem.summary?.first?.type, "summary_text")
+        XCTAssertEqual(reasoningItem.encryptedContent, "mock-encrypted-content")
+    }
+
+    func testOpenAIResponsesFormat_encodesReasoningAsSpecJSON() throws {
+        // The wire form must be summary_text objects, never a bare string array (xAI rejects strings)
+        let reasoningMessage = SwiftyPrompts.Message.thinking(.simple(id: "mock-id", responseId: nil, reasoning: ["Thinking line 1"], encryptedContent: "mock-encrypted-content"))
+        let openAIInput = try [reasoningMessage].openAIResponsesInputFormat()
+
+        guard case let OpenAIKit.InputItem.reasoning(reasoningItem) = openAIInput[0] else {
+            XCTFail("Couldn't get reasoning response ")
+            return
+        }
+
+        let jsonData = try JSONEncoder().encode(reasoningItem)
+        let jsonString = String(data: jsonData, encoding: .utf8)!
+
+        XCTAssertTrue(jsonString.contains("\"type\":\"summary_text\""))
+        XCTAssertTrue(jsonString.contains("\"text\":\"Thinking line 1\""))
+        XCTAssertTrue(jsonString.contains("\"encrypted_content\""))
+        XCTAssertFalse(jsonString.contains("\"summary\":[\""))
+    }
+
+    func testOpenAIResponsesFormat_skipsEmptyReasoningWithoutEncryptedContent() throws {
+        // Per spec, a replayed reasoning item must have non-empty summary or encrypted_content
+        let reasoningMessage = SwiftyPrompts.Message.thinking(.simple(id: "mock-id", responseId: nil, reasoning: [], encryptedContent: nil))
+        let openAIInput = try [reasoningMessage].openAIResponsesInputFormat()
+        XCTAssertTrue(openAIInput.isEmpty)
+    }
+
+    func testReasoningItem_decodesLegacyHistoryWithoutEncryptedContent() throws {
+        // Old persisted history has .simple with 3 payload values — decoding must succeed with nil encryptedContent
+        let legacyJSON = """
+        {"simple": {"id": "rs_123", "responseId": null, "reasoning": ["Old thinking"]}}
+        """
+        let decoded = try JSONDecoder().decode(ReasoningItem.self, from: legacyJSON.data(using: .utf8)!)
+        XCTAssertEqual(decoded.reasoningTexts, ["Old thinking"])
+        XCTAssertNil(decoded.encryptedContent)
     }
 
 }

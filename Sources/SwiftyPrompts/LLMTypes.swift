@@ -36,7 +36,9 @@ public extension Content {
 public enum ReasoningItem: Codable, ProvidesEmptyStatus {
 
     /// Used by providers that return reasoning as simple text strings (e.g., OpenAI)
-    case simple(id: String?, responseId: String?, reasoning: [String])
+    /// `encryptedContent` is the opaque `encrypted_content` blob from the Responses API,
+    /// carried through history so reasoning items can be replayed with full fidelity.
+    case simple(id: String?, responseId: String?, reasoning: [String], encryptedContent: String?)
 
     /// Used by providers that return signed thinking blocks (e.g., Anthropic)
     case signed(id: String?, responseId: String?, entries: [ReasoningEntry])
@@ -58,7 +60,7 @@ public extension ReasoningItem {
     /// Flattens both cases to an array of reasoning text strings
     var reasoningTexts: [String] {
         switch self {
-        case .simple(_, _, let reasoning): reasoning
+        case .simple(_, _, let reasoning, _): reasoning
         case .signed(_, _, let entries): entries.map(\.text)
         }
     }
@@ -66,22 +68,30 @@ public extension ReasoningItem {
     /// The reasoning item's own ID (e.g., OpenAI's `rs_abc`). Not a message link ID.
     var id: String? {
         switch self {
-        case .simple(let id, _, _): id
+        case .simple(let id, _, _, _): id
         case .signed(let id, _, _): id
+        }
+    }
+
+    /// The opaque encrypted reasoning content from the Responses API (simple case only)
+    var encryptedContent: String? {
+        switch self {
+        case .simple(_, _, _, let encryptedContent): encryptedContent
+        case .signed: nil
         }
     }
 
     /// The ID of the response this reasoning is associated with
     var responseId: String? {
         switch self {
-        case .simple(_, let responseId, _): responseId
+        case .simple(_, let responseId, _, _): responseId
         case .signed(_, let responseId, _): responseId
         }
     }
 
     var isEmpty: Bool {
         switch self {
-        case .simple(_, _, let reasoning): reasoning.isEmpty
+        case .simple(_, _, let reasoning, let encryptedContent): reasoning.isEmpty && encryptedContent == nil
         case .signed(_, _, let entries): entries.isEmpty
         }
     }
