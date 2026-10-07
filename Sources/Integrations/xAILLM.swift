@@ -8,9 +8,9 @@
 //
 
 import Foundation
-import SwiftAnthropic
 import SwiftyPrompts
-import SwiftyPrompts_Anthropic
+import SwiftyPrompts_OpenAI
+import OpenAIKit
 
 public typealias XModelID = String
 
@@ -23,10 +23,15 @@ public enum XAIModel: XModelID, CaseIterable {
 }
 
 // MARK: Anthropic Chat implementation
-open class xAILLM: AnthropicLLM {
-   public static let xAIAPIBasePath = "https://api.x.ai"
+open class xAILLM: OpenAILLM {
+   public static let xAIAPIBasePath = "api.x.ai" //https://
 
-   public init(httpClient: HTTPClient? = nil, baseUrl: String = xAILLM.xAIAPIBasePath, apiKey: String, model: XModelID, temperature: Double = 1.0, tools: [SwiftAnthropic.MessageParameter.Tool]? = nil) {
-       super.init(httpClient: httpClient, baseUrl: baseUrl, apiKey: apiKey, model: .other(model), temperature: temperature, tools: tools)
-   }
+    public init(baseUrl: String = xAILLM.xAIAPIBasePath, apiKey: String, model: XModelID, systemPromptPrefix: String? = nil, temperature: Double? = 0.0, tools: [Tool]?, scheme: API.Scheme = .https) {
+        
+        super.init(baseUrl: baseUrl, apiKey: apiKey, model: Model.Other(id: model), temperature: temperature, tools: tools, storeResponses: false)
+    }
+
+    public override func infer(messages: [Message], stops: [String] = [], responseFormat: ResponseFormat, apiType: APIType = .advanced) async throws -> LLMOutput? {
+        try await super.infer(messages: messages, stops: stops, responseFormat: responseFormat, apiType: .advanced)
+    }
 }

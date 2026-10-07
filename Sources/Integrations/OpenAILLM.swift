@@ -321,7 +321,7 @@ open class OpenAILLM: LLM {
             throw ContentError.notAValidReasoningItem
         }
         
-        return .simple(id: oi.id, responseId: nil, reasoning: oi.summary ?? [])
+        return .simple(id: oi.id, responseId: nil, reasoning: oi.summary?.asSimple ?? [])
     }
     
     private func decodeToolCall(oi: OutputItem) throws -> MCPToolCallRequest {
