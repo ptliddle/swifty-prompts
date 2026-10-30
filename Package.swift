@@ -119,8 +119,8 @@ let package = Package(
             name: "SwiftyPrompts.xAI",
             dependencies: [
                 "SwiftyPrompts",
-                "SwiftyPrompts.Anthropic",
-                .product(name: "SwiftAnthropic", package: "SwiftAnthropic")
+                "SwiftyPrompts.OpenAI",
+                .product(name: "OpenAIKit", package: "openai-kit")
             ],
             path: "Sources/Integrations",
             sources: [
