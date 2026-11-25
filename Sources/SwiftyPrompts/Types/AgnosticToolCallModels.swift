@@ -62,17 +62,21 @@ public struct ToolCallExchange: Codable {
     
     public var callId: String
     public var request: MCPToolCallRequest
-    public var response: MCPToolCallResponse? 
-    
-    public init(callId: String, request: MCPToolCallRequest, response: MCPToolCallResponse? = nil) throws(ToolCallExhcangeError) {
-        
+    public var response: MCPToolCallResponse?
+    /// Creation timestamp of the exchange, used by consumers (e.g. EridaniSwift) to reason about snapshot staleness.
+    /// Optional so previously stored exchanges (which lack this key) decode unchanged.
+    public var timestamp: Date?
+
+    public init(callId: String, request: MCPToolCallRequest, response: MCPToolCallResponse? = nil, timestamp: Date? = nil) throws(ToolCallExhcangeError) {
+
         guard callId == request.callId else {
             throw .callIdMustMatchCallIdInRequest
         }
-        
+
         self.callId = callId
         self.request = request
         self.response = response
+        self.timestamp = timestamp
     }
     
     public var hasResponse: Bool {
